@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube 日文字幕 (本機 STT)",
+  "version": "0.1.0",
+  "description": "擷取 YouTube 分頁音訊並在本機進行日文語音辨識，於播放器上顯示字幕。",
+  "permissions": ["tabCapture", "offscreen", "scripting", "activeTab", "storage"],
+  "host_permissions": ["*://www.youtube.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ]
+}
