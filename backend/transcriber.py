@@ -33,7 +33,9 @@ import numpy as np
 from faster_whisper import WhisperModel
 from faster_whisper.vad import VadOptions, get_speech_timestamps
 
-from config import SAMPLE_RATE, SILENCE_TRIGGER_MS, WHISPER_MODEL_SIZE, WHISPER_LANGUAGE
+from config import SAMPLE_RATE, SILENCE_TRIGGER_MS, STT_MODEL, STT_MODEL_PRESETS, WHISPER_LANGUAGE
+
+MODEL_REPO = STT_MODEL_PRESETS[STT_MODEL]
 
 logger = logging.getLogger("transcriber")
 
@@ -60,9 +62,16 @@ FINAL_KWARGS = dict(beam_size=5, condition_on_previous_text=False, vad_filter=Tr
 
 
 def load_model():
+    # No silent model-level fallback: if MODEL_REPO itself is bad (typo'd repo
+    # id, no internet, etc.) rather than just "CUDA is unusable", the CPU
+    # attempt below fails too and the exception propagates out of this
+    # function uncaught — main.py has no try/except around this call, so
+    # that's a loud startup crash with a full traceback, not a silent
+    # downgrade to a different STT model.
     global _model
+    logger.info("Loading STT model '%s' (preset '%s')", MODEL_REPO, STT_MODEL)
     try:
-        candidate = WhisperModel(WHISPER_MODEL_SIZE, device="cuda", compute_type="float16")
+        candidate = WhisperModel(MODEL_REPO, device="cuda", compute_type="float16")
         # get_cuda_device_count() only checks the CUDA driver; it doesn't confirm
         # the cuBLAS/cuDNN runtime DLLs used during actual inference are present.
         # Run one real (tiny) inference to catch that before committing to CUDA.
@@ -71,11 +80,18 @@ def load_model():
         # making this check pass even when CUDA is actually unusable.
         list(candidate.transcribe(np.zeros(16000, dtype=np.float32), language=WHISPER_LANGUAGE, beam_size=1)[0])
         _model = candidate
-        logger.info("Whisper model '%s' loaded on CUDA (float16)", WHISPER_MODEL_SIZE)
+        logger.info("STT model '%s' loaded on CUDA (float16)", MODEL_REPO)
     except Exception:
-        logger.warning("CUDA unavailable or unusable, falling back to CPU (int8)", exc_info=True)
-        _model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
-        logger.info("Whisper model '%s' loaded on CPU (int8)", WHISPER_MODEL_SIZE)
+        logger.warning(
+            "'%s' failed on CUDA (could be a missing cuBLAS/cuDNN runtime, or a real "
+            "model problem — see traceback below); retrying on CPU. If this ALSO "
+            "fails, that error will propagate and crash startup rather than "
+            "silently trying a different model.",
+            MODEL_REPO,
+            exc_info=True,
+        )
+        _model = WhisperModel(MODEL_REPO, device="cpu", compute_type="int8")
+        logger.info("STT model '%s' loaded on CPU (int8)", MODEL_REPO)
     return _model
 
 
@@ -100,3 +116,16 @@ def has_trailing_silence(pcm16_bytes: bytes) -> bool:
     trailing_samples = len(audio) - segments[-1]["end"]
     trailing_ms = trailing_samples / SAMPLE_RATE * 1000
     return trailing_ms >= SILENCE_TRIGGER_MS
+
+
+def get_speech_span(pcm16_bytes: bytes):
+    """Returns (first_speech_start_s, last_speech_end_s), both in seconds
+    relative to the start of this chunk — the real VAD-detected speech
+    envelope, for computing actual audio-timeline gaps between segments (see
+    server.py's sentence_buffer_worker). Returns (None, None) if no speech
+    was detected in this chunk at all."""
+    audio = _pcm16_to_float32(pcm16_bytes)
+    segments = get_speech_timestamps(audio, _silence_vad_options, sampling_rate=SAMPLE_RATE)
+    if not segments:
+        return None, None
+    return segments[0]["start"] / SAMPLE_RATE, segments[-1]["end"] / SAMPLE_RATE

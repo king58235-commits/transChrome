@@ -1,8 +1,6 @@
 # YouTube 即時日文字幕翻譯工具
 
-本機工具：擷取 YouTube 分頁音訊 → 本機日文語音辨識 → 即時字幕 Overlay，顯示在 YouTube 播放器畫面上。完全本機運算，不使用付費 API，不依賴雲端 LLM。
-
-目前完成到「即時串流字幕」（partial 邊講邊顯示、停頓後 finalize 定案），尚未包含翻譯（見「下一階段建議」）。
+本機工具：擷取 YouTube 分頁音訊 → 本機日文語音辨識 → 本機日文→繁體中文翻譯 → 即時雙語字幕 Overlay，顯示在 YouTube 播放器畫面上。完全本機運算，不使用付費 API，不依賴雲端 LLM。
 
 ## 1. 目前架構
 
@@ -13,15 +11,45 @@ Chrome Tab Audio
   → Python Backend
       → Audio Buffer 累積
       → 語音停頓偵測 (Silero VAD, faster-whisper 內建)
-      → faster-whisper (Whisper "small", GPU CUDA float16 優先，CPU int8 為 fallback)
-      → partial / final 結果
-  → WebSocket 送回 Extension
-  → content.js 更新 YouTube 播放器上的字幕 Overlay
+      → faster-whisper (kotoba-whisper-v2.0-faster，GPU CUDA float16 優先，CPU int8 為 fallback)
+      → Japanese partial / final 結果
+      → （只有 final）Translation Sentence Buffer：依「真實 audio 停頓時間」合併相鄰 STT final，
+        避免一句話因為 STT 的短停頓斷句被拆成沒有上下文的片段分別翻譯
+      → MADLAD-400 3B int8（ctranslate2，裝置依 Hardware Preset 決定）→ OpenCC s2twp → 繁體中文（台灣用字）
+  → WebSocket 送回 Extension（partial / final / translation 三種訊息各自獨立）
+  → content.js 更新 YouTube 播放器上的雙語字幕 Overlay（日文小字在上持續更新，繁中大字在下、final 才更新）
 ```
 
-**串流字幕的運作方式**：講話期間，backend 每 ~0.75 秒把目前這句「還沒講完」的音訊整段重新辨識一次，當作可被覆寫的 `partial` 送回去顯示；偵測到語音停頓（或講超過 8 秒還沒停頓）就用較高品質設定做最後一次辨識，當作 `final` 送出並鎖定顯示，同時清空 buffer 開始下一句。
+**串流字幕的運作方式**：講話期間，backend 每 ~0.75 秒把目前這句「還沒講完」的音訊整段重新辨識一次，當作可被覆寫的 `partial` 送回去顯示；偵測到語音停頓（或講超過 8 秒還沒停頓）就用較高品質設定做最後一次辨識，當作 `final` 送出並鎖定顯示，同時清空 buffer 開始下一句。沒有做增量式的 confirmed-prefix 演算法（像 Whisper-Streaming 那樣） — GPU 加速後單次辨識已經快到可以每次整段重跑，不需要那層複雜度。
 
-沒有做增量式的 confirmed-prefix 演算法（像 Whisper-Streaming 那樣） — 因為 GPU 加速後單次辨識已經快到可以每次整段重跑，不需要那層複雜度。
+**翻譯的運作方式**：只有 finalized 的日文才會被翻譯，partial 不會。STT 的斷句（~300ms 停頓）是為了讓日文字幕反應快，但常常把一句話切成好幾段；直接逐段翻譯會讓 NLLB 失去上下文、翻出語意不連貫的中文。因此在 STT 與翻譯之間加了一層 Translation Sentence Buffer：用 VAD 量出的**真實語音停頓時間**（不是 STT final 訊息抵達 server 的時間差，那個會被 buffering / inference 延遲污染）判斷要不要把相鄰的 STT final 合併成一個翻譯單位。翻譯本身跑在獨立的 FIFO queue + worker，跟 STT 完全解耦，翻譯多慢都不會卡住日文字幕。
+
+**Hardware Preset**（`backend/config.py` 的 `HARDWARE_PRESET`，決定 STT/翻譯各自跑在哪個裝置，集中一處管理，不在 `transcriber.py`/`translator.py` 各自 hardcode）：
+
+| Preset | STT 裝置 | 翻譯裝置 | 適合硬體 | 實測數據 |
+|---|---|---|---|---|
+| **`balanced`**（目前預設） | GPU | **CPU** | VRAM 偏緊的顯卡（約 6-8GB，例如公司這台 RTX 3050 8GB） | 翻譯平均延遲 1.6 秒、P95 2.9 秒；VRAM 只需 Kotoba 的 ~2.1GB，餘裕充足 |
+| `high` | GPU | GPU | 顯存較充裕的顯卡（例如 RTX 4070 Ti 12GB+） | 翻譯平均延遲 528ms（比 CPU 快 3 倍）；此卡上實測峰值 VRAM 7533/8192MB，餘裕僅 ~660MB，建議留給顯存更大的卡 |
+
+啟動時 console 會明確印出目前模式，例如：
+```
+Hardware preset: balanced
+STT: Kotoba / CUDA
+Translation: MADLAD / CPU
+```
+若 `HARDWARE_PRESET` 設成不支援的值，啟動時會直接報錯並列出合法值，不會靜默 fallback。目前只有 `balanced`/`high` 兩檔；純 CPU（含 STT）已實測不可行（Kotoba CPU realtime factor 2.622，處理速度比音訊本身還慢），故未提供第三檔，詳見 `backend/benchmark/hardware_compat_matrix.md`。
+
+**其他目前正式參數**（`backend/config.py`）：
+
+| 參數 | 值 | 用途 |
+|---|---|---|
+| `STT_MODEL` | `kotoba` | 對應 `STT_MODEL_PRESETS["kotoba"]` = `kotoba-tech/kotoba-whisper-v2.0-faster`。可切換 `small`/`medium`/`kotoba`，比較結果見 `backend/benchmark/result_*.json` |
+| `TRANSLATION_MODEL_REPO` | `Heng666/madlad400-3b-mt-ct2-int8` | MADLAD-400 3B，選型依據見 `backend/benchmark/translation_model_comparison.md` |
+| `TRANSLATION_NO_REPEAT_NGRAM_SIZE` | 3 | 修掉 MADLAD 短句重複迴圈問題的 decoding 參數，校準依據見 `backend/benchmark/madlad_decoding_sweep.md` |
+| `SILENCE_TRIGGER_MS` | 300ms | STT 斷句用的語音停頓門檻（日文字幕反應速度） |
+| `TRANSLATION_BOUNDARY_SILENCE_MS` | 800ms | 判斷是否合併相鄰 STT final 成一個翻譯單位的真實語音停頓門檻 |
+| `TRANSLATION_IDLE_FLUSH_S` | 1.2s | 保底：等不到下一個 STT final 時，最多等這麼久就把目前累積的內容送去翻譯（經 4 組 sweep 校準） |
+| `TRANSLATION_MAX_AUDIO_SECONDS` / `TRANSLATION_MAX_CHARS` | 7.0s / 70 字 | 保底上限，避免講很久都不停頓時翻譯單位無限變大 |
 
 ## 2. 實際建立的檔案
 
@@ -32,7 +60,7 @@ Chrome Tab Audio
 | `background.js` | Service worker：tabCapture 協調、offscreen document 生命週期、狀態管理（用 `chrome.storage.session`，因為 service worker 會被 Chrome 回收，不能用一般變數存狀態）、字幕轉發給 content script |
 | `offscreen.js` | 實際擷取分頁音訊（`getUserMedia`）、接回喇叭讓使用者仍聽得到聲音、透過 AudioWorklet 降頻、WebSocket 收送 |
 | `worklet-processor.js` | AudioWorklet：把原生取樣率降到 16kHz mono PCM16 |
-| `content.js` | 在 YouTube 播放器 DOM 上掛字幕 overlay，接收 partial/final 更新 |
+| `content.js` | 在 YouTube 播放器 DOM 上掛雙語字幕 overlay：日文小字在上（partial/final 即時更新）、繁中大字在下（只在翻譯完成時更新，不會因日文 partial 更新而閃爍消失） |
 | `popup.html` / `popup.js` | 開始/停止按鈕、Backend 連線狀態顯示 |
 | `styles.css` | popup 樣式 + 字幕 overlay 樣式 |
 
@@ -42,34 +70,56 @@ Chrome Tab Audio
 | `main.py` | 進入點：載入 Whisper 模型、啟動 WebSocket server |
 | `server.py` | WebSocket 連線處理、partial/final 觸發邏輯、逾時保護 |
 | `audio_buffer.py` | 累積收到的 PCM16 音訊 |
-| `transcriber.py` | faster-whisper 封裝：模型載入（含 CUDA 能力偵測與 CPU fallback）、GPU DLL 路徑註冊、VAD 停頓偵測、partial/final 兩種辨識設定 |
-| `config.py` | 所有可調參數（chunk 秒數、VAD 閾值、逾時秒數等） |
+| `transcriber.py` | faster-whisper 封裝：模型載入（含 CUDA 能力偵測與 CPU fallback）、GPU DLL 路徑註冊、VAD 停頓偵測與真實語音時間擷取、partial/final 兩種辨識設定 |
+| `translator.py` | 獨立翻譯模組（刻意不 import transcriber.py，與 STT 解耦）：MADLAD 模型載入（裝置依 `HARDWARE_PRESET` 決定，不再自動 CUDA→CPU fallback，因為裝置已是明確選擇）、日文→簡中翻譯、OpenCC 轉台灣繁中，翻譯失敗永遠回傳空字串、不拋例外 |
+| `config.py` | 所有可調參數（STT 模型選擇、VAD 閾值、翻譯合併門檻等，見上方「目前正式參數」） |
 | `test_client.py` | 不需要 Chrome，直接送合成音訊測試 backend 的除錯工具 |
+| `benchmark/` | 模型/硬體比較工具與長期參考資料：`recorder.py`（錄固定測試音訊）、`run_model.py`/`run_translation_model.py`/`run_madlad_decoding_sweep.py`（STT/翻譯模型與 decoding 參數跑分）、`test_*.py`（硬體相容性測試）、`translation_dataset.py`（固定 70 句翻譯測試集）、三份 `.md` 比較報告。原始逐句 JSON 輸出跟測試音訊本身（`.wav`，內含真實直播內容，有版權疑慮）不進 Git，只保留腳本、資料集跟摘要報告 |
 | `setup.bat` | 一鍵建立 venv + 安裝套件 |
 | `start.bat` | 一鍵啟動 backend |
 | `requirements.txt` | Python 套件清單 |
 
-## 3. 安裝方法
+## 3. 新電腦安裝流程
 
-**系統需求**：Windows、Python 3.10+（開發時用 3.13）、Google Chrome（116+，需要 `tabCapture.getMediaStreamId`）。NVIDIA GPU 為選用，沒有的話會自動用 CPU（速度較慢但仍可運作）。
+**系統需求**：Windows、Python 3.10+（開發時用 3.13）、Google Chrome（116+，需要 `tabCapture.getMediaStreamId`）。STT（Kotoba）一定要有 NVIDIA GPU（兩個 preset 都固定用 CUDA，目前沒有 CPU-only 選項——實測 Kotoba 在 CPU 上 realtime factor 2.622，追不上直播音訊，故未提供）。
 
-### Backend
-```
-cd backend
-setup.bat
-```
-會自動建立虛擬環境並安裝套件。**如果沒有 NVIDIA GPU**，可以先把 `requirements.txt` 最後兩行（`nvidia-cublas-cu12`、`nvidia-cudnn-cu12`，共約 1.3GB）刪掉再跑 `setup.bat`，省下載時間，程式會自動改用 CPU。
+1. **取得原始碼**：從 Git clone，或直接複製整個專案資料夾到新電腦（不含 `backend/venv/`、任何 `__pycache__/`，這些都不需要、也不會被帶過去）
+2. **建立環境**：
+   ```
+   cd backend
+   setup.bat
+   ```
+   會在**全新一台電腦、完全沒有 venv 的狀態下**自動建立虛擬環境並安裝 `requirements.txt` 裡的所有套件（已實測驗證：用一份乾淨、沒有任何手動裝過套件的 venv 跑過，requirements.txt 本身就足夠讓 Kotoba+MADLAD 兩個模型成功載入並跑出真實翻譯結果）。這步會下載約 1.3GB 的 NVIDIA CUDA runtime（cuBLAS/cuDNN），不需要另外安裝完整 CUDA Toolkit。
+3. **選擇硬體 preset**：打開 `backend/config.py`，確認 `HARDWARE_PRESET` 設成符合你新電腦顯卡的值：
+   ```python
+   HARDWARE_PRESET = "balanced"  # 顯存偏緊的卡，例如 RTX 3050 8GB
+   ```
+   或
+   ```python
+   HARDWARE_PRESET = "high"  # 顯存充裕的卡，例如 RTX 4070 Ti 12GB+
+   ```
+   （這台公司電腦是 RTX 3050 8GB，用 `balanced`；家裡如果是 RTX 4070 Ti，改成 `high`。詳細差異見下方「Hardware Preset」表格。）
+4. **啟動 backend**：
+   ```
+   start.bat
+   ```
+   第一次啟動會從 Hugging Face **自動下載模型**（不依賴這台公司電腦既有的任何快取，新電腦會是全新下載）：
+   - Kotoba-whisper（約 1.5GB）
+   - MADLAD-400 3B（約 3GB）
 
-### Chrome 擴充功能
-1. 開 `chrome://extensions`
-2. 右上角打開「開發人員模式」
-3. 「載入未封裝項目」→ 選擇 `extension` 資料夾
-4. 建議把它釘選到工具列方便使用
+   下載完會快取在 `%USERPROFILE%\.cache\huggingface\hub`，之後每次啟動不用重下。**第一次啟動需要較大的磁碟空間（建議預留 10GB 以上）跟網路連線，時間會明顯比之後久**；等到 console 出現 `server listening on 127.0.0.1:8765` 就代表完成。
+   - 如何清除模型快取：直接刪除 `%USERPROFILE%\.cache\huggingface\hub` 底下對應的 `models--*` 資料夾即可，重開 backend 會自動重新下載
+5. **載入 Chrome 擴充功能**：
+   1. 開 `chrome://extensions`
+   2. 右上角打開「Developer mode / 開發人員模式」
+   3. 「Load unpacked / 載入未封裝項目」→ 選擇 `extension/` 資料夾
+   4. 建議把它釘選到工具列方便使用
+
+完成後即可打開日文 YouTube 影片、點擴充功能圖示 →「開始字幕」開始使用（見下方「執行方法」）。
 
 ## 4. 執行方法
 
 1. 雙擊 `backend/start.bat`（或 `cd backend && start.bat`），等到 console 出現 `server listening on 127.0.0.1:8765`
-   - 第一次啟動會從 Hugging Face 下載 Whisper small 模型（約 250MB），需要網路
 2. 打開一個日文 YouTube 影片，點擴充功能圖示 →「開始字幕」
 3. 講話期間字幕會即時浮現並持續修正，停頓後定案
 4. 「停止字幕」會停止擷取並清除畫面上的字幕

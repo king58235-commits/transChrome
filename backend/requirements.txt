@@ -1,6 +1,21 @@
 websockets>=12.0
 faster-whisper>=1.0.0
-# GPU runtime for ctranslate2/faster-whisper on Windows without a full CUDA
-# Toolkit install — see transcriber.py's _register_nvidia_dll_dirs().
+numpy>=1.24
+# ctranslate2 and huggingface_hub are pulled in transitively by
+# faster-whisper too, but listed explicitly here since transcriber.py/
+# translator.py import them directly — don't want a future faster-whisper
+# dependency change to silently break that.
+ctranslate2>=4.0
+huggingface_hub>=0.21
+
+# GPU runtime for ctranslate2 (faster-whisper + translator.py) on Windows
+# without a full CUDA Toolkit install — see transcriber.py's/translator.py's
+# _register_nvidia_dll_dirs(). Needed whenever HARDWARE_PRESET uses "cuda"
+# for either model (both "balanced" and "high" use it for STT at minimum).
 nvidia-cublas-cu12
 nvidia-cudnn-cu12
+
+# Japanese -> Traditional Chinese translation (translator.py): MADLAD-400 3B,
+# tokenized via raw sentencepiece (no torch/transformers needed).
+sentencepiece>=0.1.99
+opencc>=1.1.6

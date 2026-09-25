@@ -111,20 +111,20 @@ async function startCapture() {
 async function stopCapture() {
   console.log("[background] stopCapture requested");
   sendToOffscreen({ type: "stop-capture" });
-  await sendSubtitleToTab("", true); // clear any subtitle left on screen from before stopping
+  await sendToContent({ type: "CLEAR" }); // clear any subtitles left on screen from before stopping
   await setState({ capturing: false, backendConnected: false, activeTabId: null });
   sendToPopup({ type: "STATUS", capturing: false });
 }
 
-async function sendSubtitleToTab(text, final) {
+async function sendToContent(message) {
   const { activeTabId } = await getState();
   if (activeTabId == null) {
-    console.warn("[background] SUBTITLE received but no activeTabId set");
+    console.warn("[background] tried to message content script but no activeTabId set", message);
     return;
   }
-  const message = { target: "content", type: "SUBTITLE_UPDATE", text, final };
+  const full = { ...message, target: "content" };
   try {
-    await chrome.tabs.sendMessage(activeTabId, message);
+    await chrome.tabs.sendMessage(activeTabId, full);
   } catch (err) {
     // No content script listening in that tab: either the tab was already open
     // before this extension (re)loaded (a manifest content_scripts injection
@@ -135,9 +135,16 @@ async function sendSubtitleToTab(text, final) {
     try {
       await chrome.scripting.executeScript({ target: { tabId: activeTabId }, files: ["content.js"] });
       await chrome.scripting.insertCSS({ target: { tabId: activeTabId }, files: ["styles.css"] });
-      await chrome.tabs.sendMessage(activeTabId, message);
+      await chrome.tabs.sendMessage(activeTabId, full);
     } catch (retryErr) {
       console.error("[background] sendMessage to content script failed after re-injection", retryErr);
+      if (String(retryErr.message).includes("No tab with id")) {
+        // The tab itself is gone (closed/navigated away entirely), not just a
+        // missing content script — retrying on every future message would
+        // just repeat this same failure. Clear the stale reference instead.
+        console.warn("[background] target tab no longer exists, clearing activeTabId");
+        await setState({ activeTabId: null });
+      }
     }
   }
 }
@@ -164,8 +171,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.type === "ERROR") {
     sendToPopup(message);
-  } else if (message.type === "SUBTITLE") {
-    sendSubtitleToTab(message.text, message.final);
+  } else if (message.type === "JA_PARTIAL") {
+    sendToContent({ type: "JA_PARTIAL", text: message.text });
+  } else if (message.type === "JA_FINAL") {
+    sendToContent({ type: "JA_FINAL", segmentId: message.segmentId, text: message.text });
+  } else if (message.type === "ZH_FINAL") {
+    sendToContent({
+      type: "ZH_FINAL",
+      segmentId: message.segmentId,
+      sourceText: message.sourceText,
+      text: message.text,
+    });
   }
 });
 

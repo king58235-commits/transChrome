@@ -46,9 +46,20 @@ function connectWebSocket() {
       console.error("[offscreen] failed to parse backend message", err, event.data);
       return;
     }
-    if (data.type === "partial" || data.type === "final") {
-      console.log(`[offscreen] ${data.type}:`, data.text);
-      notifyBackground({ type: "SUBTITLE", text: data.text, final: data.type === "final" });
+    if (data.type === "partial") {
+      console.log("[offscreen] partial:", data.text);
+      notifyBackground({ type: "JA_PARTIAL", text: data.text });
+    } else if (data.type === "final") {
+      console.log(`[offscreen] final #${data.segment_id}:`, data.text);
+      notifyBackground({ type: "JA_FINAL", segmentId: data.segment_id, text: data.text });
+    } else if (data.type === "translation") {
+      console.log(`[offscreen] translation #${data.segment_id}:`, data.text);
+      notifyBackground({
+        type: "ZH_FINAL",
+        segmentId: data.segment_id,
+        sourceText: data.source_text,
+        text: data.text,
+      });
     }
   };
 }
