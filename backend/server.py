@@ -374,7 +374,9 @@ async def handler(websocket):
                 if recording is not None:
                     recording.writeframes(message)
                 audio_position_s += len(message) / BYTES_PER_SECOND
-                logger.info(
+                # DEBUG, not INFO: one line every 250ms was most of the log
+                # file; stalls are logged by the [GAP] diagnostics instead.
+                logger.debug(
                     "Audio received: %d bytes (buffer duration: %.2fs)",
                     len(message),
                     buffer.duration_seconds(),

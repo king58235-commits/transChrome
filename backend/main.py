@@ -43,6 +43,14 @@ os.makedirs(LOG_DIR, exist_ok=True)
 log_handlers = [logging.FileHandler(LATEST_LOG, mode="w", encoding="utf-8")]
 log_path = None
 if config.LOG_TO_FILE:
+    # Keep only the newest LOG_KEEP_FILES timestamped logs (this start's
+    # included); the names sort by start time.
+    old_logs = sorted(f for f in os.listdir(LOG_DIR) if f.startswith("backend_") and f.endswith(".log"))
+    for name in old_logs[:max(0, len(old_logs) - (config.LOG_KEEP_FILES - 1))]:
+        try:
+            os.remove(os.path.join(LOG_DIR, name))
+        except OSError:
+            pass
     log_path = os.path.join(LOG_DIR, time.strftime("backend_%Y%m%d_%H%M%S.log"))
     log_handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
 _file_format = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -50,6 +58,10 @@ for handler in log_handlers:
     handler.setFormatter(_file_format)
 logging.basicConfig(level=logging.INFO, handlers=log_handlers)
 logging.captureWarnings(True)  # Python warnings (e.g. Hugging Face's) to the log, not the console
+# Routine per-call lines from libraries ("Processing audio with duration",
+# "VAD filter removed", every HTTP request) filled most of the log file.
+for noisy in ("faster_whisper", "httpx"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 warnings.filterwarnings("ignore", message=".*unauthenticated requests.*")
 
 logger = logging.getLogger("main")

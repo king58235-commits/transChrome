@@ -178,7 +178,7 @@ Chrome 分頁音訊
 | `TRANSLATION_BOUNDARY_SILENCE_MS` | 800ms | 合併相鄰 final 成一個翻譯單位的停頓門檻 |
 | `TRANSLATION_JOIN_CONTINUATION` | True | 沒講完的句子與下一句合併翻譯 |
 | `AUDIO_GAP_LOG_S` | 1.0s | 停頓診斷：超過此時間沒收到音訊時記錄 `[GAP]` |
-| `LOG_TO_FILE` | True | 除 `latest.log` 外另存 `logs/backend_*.log` |
+| `LOG_TO_FILE` / `LOG_KEEP_FILES` | True / 10 | 除 `latest.log` 外另存 `logs/backend_*.log`，只保留最近 10 份，更舊的在啟動時自動刪除 |
 | `SAVE_SESSION_AUDIO` | False | 開啟時另存每次字幕的音訊到 `recordings/`，供離線重播測試 |
 | `HARDWARE_PRESET` | `high` | 只影響 STT 與 legacy MADLAD 的裝置；Sakura 固定在 GPU |
 

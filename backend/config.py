@@ -98,12 +98,14 @@ STT_HALLUCINATION_MAX_SPEECH_S = 0.3
 SAVE_SESSION_AUDIO = False
 SESSION_AUDIO_DIR = "recordings"
 
-# Also write the console log to LOG_DIR (relative to backend/), one file per
-# backend start, so a live session can be analyzed without copy-pasting the
-# console. About 3MB per hour (mostly the per-chunk "Audio received" lines).
+# Besides logs/latest.log (overwritten on every start), keep one timestamped
+# log per backend start in LOG_DIR (relative to backend/), so earlier live
+# sessions can still be analyzed. Only the newest LOG_KEEP_FILES are kept;
+# older ones are deleted at startup, so the folder can't grow without limit.
 # Git-ignored.
 LOG_TO_FILE = True
 LOG_DIR = "logs"
+LOG_KEEP_FILES = 10
 
 # Stall diagnostics (log only, no behavior change): when no audio arrives
 # from the extension for this long, log a [GAP] line with what the backend
