@@ -1,0 +1,13 @@
+
+=================================
+ transChrome 安裝完成
+=================================
+
+下一步：
+
+1. 執行 start.bat（第一次啟動會下載約 6GB 的 AI 模型）
+2. Chrome 開啟 chrome://extensions
+3. 開啟「開發人員模式」（Developer Mode）
+4. 「載入未封裝項目」（Load unpacked）→ 選擇 extension 資料夾
+
+詳細說明請看 README.md

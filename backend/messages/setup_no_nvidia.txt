@@ -1,0 +1,3 @@
+
+[警告] 找不到 NVIDIA 顯示卡或驅動程式（nvidia-smi）。
+       transChrome 需要支援 CUDA 的 NVIDIA 顯示卡，請安裝最新的 NVIDIA 驅動程式。

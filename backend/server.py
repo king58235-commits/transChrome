@@ -427,7 +427,9 @@ async def handler(websocket):
             recording.close()
 
 
-async def start_server():
+async def start_server(on_ready=None):
     logger.info("Starting server on ws://%s:%d", HOST, PORT)
     async with websockets.serve(handler, HOST, PORT, max_size=None):
+        if on_ready is not None:
+            on_ready()
         await asyncio.Future()  # run forever

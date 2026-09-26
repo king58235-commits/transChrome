@@ -1,0 +1,3 @@
+# cmd.exe mis-parses labels/goto in LF-only batch files; always check them out
+# with Windows line endings, whatever the user's core.autocrlf is.
+*.bat text eol=crlf

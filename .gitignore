@@ -19,3 +19,14 @@ backend/logs/
 # llama.cpp runtime installed by setup_llama.py (third-party binaries)
 backend/runtime/
 backend/benchmark/stt_compare*.txt
+
+# Release packages built by make_release.py
+release/
+
+# Personal editor / OS files
+.vscode/
+.idea/
+*.code-workspace
+.env
+Thumbs.db
+desktop.ini

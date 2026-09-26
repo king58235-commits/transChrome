@@ -1,0 +1,2 @@
+transChrome backend 已經在執行。
+請使用工作列上標題為「transChrome Backend - RUNNING」的視窗，或先關閉它：

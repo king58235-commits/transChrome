@@ -1,3 +1,5 @@
+VERSION = "1.0.0"  # shown at startup; keep in sync with extension/manifest.json
+
 HOST = "127.0.0.1"
 PORT = 8765
 
@@ -93,7 +95,7 @@ STT_HALLUCINATION_MAX_SPEECH_S = 0.3
 # (relative to backend/), so a live session can be replayed offline for STT /
 # Translation Buffer tuning. About 115MB per hour. It is the stream's audio,
 # so it stays local (git-ignored). Doesn't affect subtitles either way.
-SAVE_SESSION_AUDIO = True
+SAVE_SESSION_AUDIO = False
 SESSION_AUDIO_DIR = "recordings"
 
 # Also write the console log to LOG_DIR (relative to backend/), one file per

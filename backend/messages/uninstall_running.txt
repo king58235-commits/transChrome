@@ -1,0 +1,2 @@
+
+[ERROR] transChrome backend 還在執行。請先關閉 backend 視窗後再執行 uninstall.bat。

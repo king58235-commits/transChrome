@@ -1,0 +1,2 @@
+
+[ERROR] 無法建立 Python 執行環境（venv）。請確認 Python 安裝完整後重新執行 setup.bat。

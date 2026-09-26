@@ -1,0 +1,5 @@
+
+[ERROR] 找不到 Python 3.10 以上的 64 位元版本。
+
+請到 https://www.python.org/downloads/ 下載並安裝 Python 3.10 以上（64-bit），
+安裝時請勾選「Add python.exe to PATH」，裝好後重新執行 setup.bat。

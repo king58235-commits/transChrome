@@ -1,0 +1,2 @@
+[ERROR] 找不到執行環境（backend\venv）。
+請先執行 setup.bat。

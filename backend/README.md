@@ -1,29 +1,23 @@
 # Backend
 
-Full architecture, install, run, known issues, and benchmarks are documented
-in the [project README](../README.md). Quick reference:
+Installation, usage and architecture are in the [project README](../README.md).
+Quick reference (the same scripts also exist at the project root):
 
-## Setup
+| Script | What it does |
+|---|---|
+| `setup.bat` | Checks Python, creates `venv`, installs packages and the llama.cpp runtime. Safe to re-run. |
+| `start.bat` | Starts the backend (`ws://127.0.0.1:8765`). Refuses to start a second one. |
+| `uninstall.bat` | Removes `venv`, `runtime`, logs and temporary files; asks before removing transChrome's models. |
 
-```
-setup.bat
-```
-
-## Run
-
-```
-start.bat
-```
-
-Starts a WebSocket server on `ws://127.0.0.1:8765`.
+Logs: `logs/latest.log` (overwritten on every start; attach it to bug reports).
 
 ## Verify without Chrome
 
 ```
-venv\Scripts\python test_client.py
+venv\Scripts\python.exe test_client.py <recording.wav>
 ```
 
-Sends synthetic silent PCM16 audio over the WebSocket protocol; useful for
-confirming the server starts and doesn't crash without needing the extension.
-Silence doesn't exercise real transcription quality — that still needs a real
-Chrome + YouTube test.
+Streams a 16kHz mono PCM16 wav in real time (for example a `recordings/` file
+saved with `SAVE_SESSION_AUDIO = True`) and prints every Japanese final and
+Chinese translation. Without an argument it sends 4 seconds of silence, which
+only checks that the server runs.

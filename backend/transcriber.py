@@ -49,6 +49,7 @@ MODEL_REPO = STT_MODEL_PRESETS[STT_MODEL]
 logger = logging.getLogger("transcriber")
 
 _model = None
+device = None  # "cuda" or "cpu" once loaded, shown at startup
 _silence_vad_options = VadOptions(min_silence_duration_ms=SILENCE_TRIGGER_MS, speech_pad_ms=0)
 
 
@@ -74,6 +75,30 @@ PARTIAL_KWARGS = dict(beam_size=1, condition_on_previous_text=False, vad_filter=
 FINAL_KWARGS = dict(beam_size=5, condition_on_previous_text=False, vad_filter=True)
 
 
+# Files faster-whisper needs from a CTranslate2 Whisper repo (same list as
+# faster_whisper.utils.download_model, which hides download progress).
+_MODEL_FILES = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
+
+
+def model_is_cached() -> bool:
+    from huggingface_hub import try_to_load_from_cache
+    return isinstance(try_to_load_from_cache(MODEL_REPO, "model.bin"), str)
+
+
+def _model_path() -> str:
+    # Download ourselves (with the Hugging Face progress bar) so a first start
+    # doesn't sit silently for minutes, then load from the local snapshot.
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.utils import disable_progress_bars, enable_progress_bars
+    if not model_is_cached():
+        return snapshot_download(MODEL_REPO, allow_patterns=_MODEL_FILES)
+    disable_progress_bars()  # already downloaded: no "Fetching 5 files" bar on every start
+    try:
+        return snapshot_download(MODEL_REPO, allow_patterns=_MODEL_FILES)
+    finally:
+        enable_progress_bars()
+
+
 def load_model():
     # No silent model-level fallback: if MODEL_REPO itself is bad (typo'd repo
     # id, no internet, etc.) rather than just "CUDA is unusable", the CPU
@@ -81,10 +106,11 @@ def load_model():
     # function uncaught — main.py has no try/except around this call, so
     # that's a loud startup crash with a full traceback, not a silent
     # downgrade to a different STT model.
-    global _model
+    global _model, device
     logger.info("Loading STT model '%s' (preset '%s')", MODEL_REPO, STT_MODEL)
+    model_path = _model_path() if "/" in MODEL_REPO else MODEL_REPO
     try:
-        candidate = WhisperModel(MODEL_REPO, device="cuda", compute_type="float16")
+        candidate = WhisperModel(model_path, device="cuda", compute_type="float16")
         # get_cuda_device_count() only checks the CUDA driver; it doesn't confirm
         # the cuBLAS/cuDNN runtime DLLs used during actual inference are present.
         # Run one real (tiny) inference to catch that before committing to CUDA.
@@ -93,6 +119,7 @@ def load_model():
         # making this check pass even when CUDA is actually unusable.
         list(candidate.transcribe(np.zeros(16000, dtype=np.float32), language=WHISPER_LANGUAGE, beam_size=1)[0])
         _model = candidate
+        device = "cuda"
         logger.info("STT model '%s' loaded on CUDA (float16)", MODEL_REPO)
     except Exception:
         logger.warning(
@@ -103,7 +130,8 @@ def load_model():
             MODEL_REPO,
             exc_info=True,
         )
-        _model = WhisperModel(MODEL_REPO, device="cpu", compute_type="int8")
+        _model = WhisperModel(model_path, device="cpu", compute_type="int8")
+        device = "cpu"
         logger.info("STT model '%s' loaded on CPU (int8)", MODEL_REPO)
     return _model
 

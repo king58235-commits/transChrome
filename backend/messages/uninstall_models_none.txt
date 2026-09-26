@@ -1,0 +1,5 @@
+  在 Hugging Face 快取中找不到 transChrome 的模型，略過。
+  如果你改過 Hugging Face 快取位置，請自行檢查並刪除以下資料夾：
+    models--kotoba-tech--kotoba-whisper-v2.0-faster
+    models--SakuraLLM--Sakura-7B-Qwen2.5-v1.0-GGUF
+    models--Heng666--madlad400-3b-mt-ct2-int8

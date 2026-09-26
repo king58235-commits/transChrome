@@ -71,6 +71,17 @@ def _prompt(japanese_text, names=()):
             f"<|im_start|>assistant\n")
 
 
+def _short_path(path):
+    """Windows 8.3 short form of path, for llama-server: it can't open a model
+    path over 260 characters or one with non-ASCII folder names (a Chinese
+    Windows user name). Falls back to the path itself."""
+    if sys.platform != "win32":
+        return path
+    buf = ctypes.create_unicode_buffer(1024)
+    n = ctypes.windll.kernel32.GetShortPathNameW(path, buf, len(buf))
+    return buf.value if 0 < n < len(buf) else path
+
+
 def _port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.5)
@@ -129,6 +140,11 @@ def stop():
     _proc = None
 
 
+def model_is_cached():
+    from huggingface_hub import try_to_load_from_cache
+    return isinstance(try_to_load_from_cache(SAKURA_MODEL_REPO, SAKURA_MODEL_FILE), str)
+
+
 def start():
     """Start llama-server with Sakura-7B fully on the GPU and wait until it is
     ready. Raises (no silent fallback) if the runtime or model is missing, the
@@ -137,11 +153,10 @@ def start():
     from huggingface_hub import hf_hub_download
 
     if not os.path.isfile(SERVER_EXE):
-        raise FileNotFoundError(f"llama-server.exe not found at {SERVER_EXE}. Run setup.bat (or "
-                                f"venv\\Scripts\\python.exe setup_llama.py) to install the llama.cpp runtime.")
+        raise FileNotFoundError(f"找不到 llama.cpp runtime（{SERVER_EXE}），請重新執行 setup.bat。")
     if _port_in_use(LLAMA_SERVER_PORT):
-        raise RuntimeError(f"Port {LLAMA_SERVER_PORT} is already in use, probably a leftover llama-server.exe. "
-                           f"Close it (Task Manager, or: taskkill /IM llama-server.exe /F) and start again.")
+        raise RuntimeError(f"Port {LLAMA_SERVER_PORT} 已被占用，可能是上次沒有關閉的 llama-server.exe。"
+                           f"請在工作管理員結束 llama-server.exe 後重新啟動。")
     _model_path = hf_hub_download(SAKURA_MODEL_REPO, SAKURA_MODEL_FILE)
     logger.info("Sakura model: %s", _model_path)
     logger.info("llama.cpp runtime: %s (llama-server log: %s)", SERVER_EXE, SERVER_LOG)
@@ -149,7 +164,7 @@ def start():
     os.makedirs(os.path.dirname(SERVER_LOG), exist_ok=True)
     started = time.monotonic()
     _proc = subprocess.Popen(
-        [SERVER_EXE, "-m", _model_path, "--host", "127.0.0.1", "--port", str(LLAMA_SERVER_PORT),
+        [SERVER_EXE, "-m", _short_path(_model_path), "--host", "127.0.0.1", "--port", str(LLAMA_SERVER_PORT),
          "-ngl", "99", "-c", "2048", "-np", "1", "--no-webui", "--api-key", _api_key],
         stdout=subprocess.DEVNULL, stderr=open(SERVER_LOG, "w", encoding="utf-8"),
     )
@@ -158,7 +173,7 @@ def start():
 
     while True:
         if _proc.poll() is not None:
-            raise RuntimeError(f"llama-server exited during startup (code {_proc.returncode}), see {SERVER_LOG}")
+            raise RuntimeError(f"llama-server 啟動失敗（代碼 {_proc.returncode}），詳見 {SERVER_LOG}")
         try:
             conn = http.client.HTTPConnection("127.0.0.1", LLAMA_SERVER_PORT, timeout=2)
             conn.request("GET", "/health")
@@ -168,7 +183,7 @@ def start():
             pass
         if time.monotonic() - started > STARTUP_TIMEOUT_S:
             stop()
-            raise RuntimeError(f"llama-server not ready after {STARTUP_TIMEOUT_S}s, see {SERVER_LOG}")
+            raise RuntimeError(f"llama-server 超過 {STARTUP_TIMEOUT_S} 秒仍未就緒，詳見 {SERVER_LOG}")
         time.sleep(0.2)
     generate("テスト")  # warm-up, and surfaces a runtime problem now instead of on the first real sentence
     logger.info("Sakura-7B ready on CUDA via llama-server (PID %d, %.1fs)", _proc.pid, time.monotonic() - started)

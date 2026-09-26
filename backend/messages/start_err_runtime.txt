@@ -1,0 +1,2 @@
+[ERROR] 找不到 llama.cpp runtime（backend\runtime）。
+請重新執行 setup.bat。

@@ -1,0 +1,15 @@
+=================================
+ transChrome 解除安裝
+=================================
+
+會刪除 transChrome 在這個資料夾裡建立的執行環境：
+  backend\venv        Python 執行環境
+  backend\runtime     llama.cpp runtime
+  backend\logs        紀錄檔
+  backend\recordings  錄音（若有開啟錄音功能）
+  __pycache__、benchmark 暫存輸出
+
+不會刪除原始碼、系統 Python、CUDA、NVIDIA 驅動程式、Chrome 或 Git。
+AI 模型會在最後另外詢問。
+
+確定要繼續嗎？
