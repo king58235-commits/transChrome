@@ -65,7 +65,7 @@ MEMBERS = [
     # ---- JP 5th gen ----
     (["雪花ラミィ", "ラミィ"], "雪花菈米"),
     (["桃鈴ねね", "ねねち", "ねね~"], "桃鈴音音"),
-    (["獅白ぼたん", "ししろん", "ぼたん~"], "獅白牡丹"),
+    (["獅白ぼたん", "ししろん", "ぼたん~", "ボタン~"], "獅白牡丹"),
     (["尾丸ポルカ", "ポルカ"], "尾丸波爾卡"),
     # ---- JP holoX ----
     (["ラプラス・ダークネス", "ラプラス", "ラプ~"], "拉普拉斯"),
@@ -74,10 +74,28 @@ MEMBERS = [
     (["博衣こより", "こより", "こよ~"], "博衣小夜璃"),
     (["沙花叉クロヱ", "沙花叉", "クロヱ", "クロエ~"], "沙花叉克蘿耶"),
     (["風真いろは", "いろは~"], "風真伊呂波"),
-    # ---- JP ReGLOSS / FLOW GLOW (kanji names pass through MADLAD as-is) ----
+    # ---- JP ReGLOSS ----
+    # Short/common readings use ~ so they are only replaced before an honorific.
+    (["火威青", "青~", "あお~"], "Ao"),
+    (["音乃瀬奏", "奏~", "かなで~"], "Kanade"),
     (["一条莉々華", "莉々華"], "一條莉莉華"),
+    (["儒烏風亭らでん", "らでん"], "Raden"),
     (["轟はじめ", "はじめ~", "番長"], "轟一"),
+    # ---- JP FLOW GLOW ----
+    (["響咲リオナ", "リオナ"], "Riona"),
+    (["虎金妃笑虎", "ニコ~"], "Niko"),
+    (["水宮枢", "すう~", "スウ~"], "Su"),
+    (["輪堂千速", "ちはや~", "チハヤ~"], "Chihaya"),
     (["綺々羅々ヴィヴィ", "ヴィヴィ"], "Vivi"),
+    # ---- JP ASOBI MAWARI TAI ----
+    (["百灯キョーコ", "キョーコ~"], "Kyoko"),
+    (["熱千めら", "めら~"], "Mela"),
+    (["鈴鳴つづり", "つづり~"], "Tsuzuri"),
+    (["宙科そぴあ", "そぴあ~"], "Sopia"),
+    # ---- holoAN ----
+    (["井月みちる", "みちる~"], "Michiru"),
+    (["花園さやか", "さやか~"], "Sayaka"),
+    (["風白ゆき", "ゆき~"], "Yuki"),
     # ---- ID ----
     (["アユンダ・リス", "リス~"], "Risu"),
     (["ムーナ"], "Moona"),
@@ -116,14 +134,52 @@ MEMBERS = [
 # all made the output worse (連動 is itself a Japanese word, 歌回 became
 # "唱歌回去"), so MADLAD handles those itself; 箱押し/箱推し too.
 TERMS = {
+    # hololive / group names
     "ホロライブ": "hololive",
     "ホロメン": "holo成員",
+    "リグロス": "ReGLOSS",
+    "フロウグロウ": "FLOW GLOW",
+    "ホロアナ": "holoAN",
+    "アソビ★まわり隊": "ASOBI★MAWARI-TAI!",
+    "アソビまわり隊": "ASOBI★MAWARI-TAI!",
+
+    # stream / channel vocabulary -- keep this list conservative.
+    "雑談配信": "閒聊直播",
+    "ゲリラ配信": "突發直播",
+    "緊急配信": "緊急直播",
+    "朝活配信": "晨間直播",
+    "耐久配信": "耐久直播",
     "生配信": "直播",
+    "配信者": "實況主",
     "配信": "直播",
+    "雑談": "閒聊",
+    "プレミア公開": "首播",
     "切り抜き": "精華剪輯",
-    "スパチャ": "SC",
+    "アーカイブ": "直播存檔",
+    "タイムスタンプ": "時間戳",
+    "概要欄": "說明欄",
+    "コメント欄": "留言區",
+    "チャット欄": "聊天室",
+    "チャンネル登録": "訂閱頻道",
+    "登録者数": "訂閱人數",
+    "収益化": "營利化",
+    "モデレーター": "管理員",
+    "ネタバレ": "劇透",
+
+    # membership / support
+    "メンシ": "頻道會員",
     "メン限": "會員限定",
+    "スパチャ": "SC",
     "同接": "同時觀看人數",
+
+    # music / content
+    "歌ってみた": "翻唱",
+    "歌みた": "翻唱",
+    "オリジナル曲": "原創曲",
+    "オリ曲": "原創曲",
+    "カバー曲": "翻唱曲",
+
+    # roles / common hololive-specific terms
     "会長": "會長",  # left as-is MADLAD made it "董事會主席"
     "マネちゃん": "經紀人",
     "マネージャー": "經紀人",
@@ -171,39 +227,57 @@ def apply(text: str) -> str:
 
 # Whole utterances that get a fixed translation instead of going to MADLAD.
 # Alone, short interjections and reactions give MADLAD nothing to translate,
-# so it invents a sentence (ああ -> "哦，是的，我很喜歡它。", さすがに -> "事實上，
-# 這一切都是為了你。", ありがとうございます -> "感謝您傳送編修。"). Only an exact
-# match of the whole utterance (ignoring punctuation) uses this; anything
-# longer still goes to MADLAD, so add only phrases whose meaning doesn't
-# depend on context (no やばい: praise or alarm depending on tone).
+# so it may invent a sentence. Only an exact whole-utterance match (ignoring
+# punctuation) uses this; anything longer still goes to MADLAD.
+#
+# Keep this table stricter than TERMS: only add utterances whose standalone
+# meaning is stable. やばい stays out (praise or alarm depending on tone).
+# 大丈夫, さすがに, で, なんか and 逆に are context-dependent too, but alone
+# MADLAD turned them into invented sentences in live logs (さすがに -> "事實上，
+# 這一切都是為了你。", で -> "並且在 的情況下。"), so they get a neutral
+# rendering that is at worst slightly off rather than made up.
 FIXED_UTTERANCES = {
     # interjections / fillers
     "ああ": "啊", "あー": "啊", "あぁ": "啊",
     "うわ": "哇", "うわー": "哇", "うわぁ": "哇", "わあ": "哇", "わー": "哇", "わぁ": "哇",
     "え": "欸", "えっ": "欸", "えー": "欸", "えぇ": "欸",
     "おお": "喔", "おー": "喔", "おっ": "喔", "おぉ": "喔",
-    "へえ": "欸", "へー": "欸", "ほう": "喔", "ふん": "哼",
-    "うん": "嗯", "うんうん": "嗯嗯", "ううん": "不是", "うーん": "嗯……",
-    "はい": "好", "で": "然後", "まあ": "嗯", "あの": "那個", "なんか": "那個……",
+    "へえ": "喔", "へー": "喔", "ほう": "喔", "ふん": "哼",
+    "うん": "嗯", "うんうん": "嗯嗯", "ううん": "不", "うーん": "嗯……",
+    "はい": "好", "まあ": "嗯……", "あの": "那個", "で": "然後", "なんか": "那個……",
     "えっと": "呃", "えーと": "呃", "えーっと": "呃", "あれ": "咦", "ん": "嗯",
-    # short reactions
+
+    # thanks / apologies
     "ありがとう": "謝謝", "ありがとうね": "謝謝", "ありがとうございます": "謝謝",
     "ありがとうございました": "謝謝",
     "ごめん": "抱歉", "ごめんね": "抱歉", "ごめんなさい": "對不起",
+
+    # short reactions with stable meaning
     "すごい": "好厲害", "すごいな": "好厲害", "すごいね": "好厲害", "本当にすごい": "真的好厲害",
     "懐かしい": "好懷念", "懐かしいな": "好懷念啊", "懐かしいね": "好懷念呢",
     "かわいい": "好可愛", "可愛い": "好可愛",
     "恥ずかしい": "好害羞", "寂しい": "好寂寞", "寂しいよ": "好寂寞喔",
     "心配だね": "真讓人擔心", "嬉しい": "好開心", "楽しい": "好開心", "面白い": "好有趣",
-    "大丈夫": "沒事", "さすが": "不愧是", "さすがに": "果然",
+    "さすが": "不愧是", "さすがに": "果然", "大丈夫": "沒事",
     "なるほど": "原來如此", "そうだね": "對啊", "そうだよね": "對吧", "そうそう": "對對",
     "本当": "真的", "本当に": "真的", "ほんと": "真的",
     "分かりました": "我知道了", "わかりました": "我知道了", "了解": "了解",
-    "おめでとう": "恭喜", "お疲れ様": "辛苦了", "おつかれ": "辛苦了",
+
+    # greetings / fixed social phrases
+    "おめでとう": "恭喜", "お疲れ様": "辛苦了", "おつかれ": "辛苦了", "おつ": "辛苦了",
     "よろしく": "請多指教", "よろしくお願いします": "請多指教",
     "おはよう": "早安", "こんにちは": "你好", "こんばんは": "晚上好", "おやすみ": "晚安",
     "ただいま": "我回來了", "おかえり": "歡迎回來", "いらっしゃい": "歡迎",
-    "やった": "太好了", "よし": "好", "逆に": "反而", "なんでなんで": "為什麼為什麼",
+
+    # other context-stable short utterances
+    "やった": "太好了", "よし": "好", "なんでなんで": "為什麼為什麼", "逆に": "反而",
+    "待って": "等一下", "ちょっと待って": "等一下",
+    "やめて": "不要", "だめ": "不行", "ダメ": "不行",
+    "もちろん": "當然",
+    "頑張って": "加油", "がんばって": "加油",
+    "おいしい": "好吃", "美味しい": "好吃",
+    "怖い": "好可怕", "眠い": "好睏", "暑い": "好熱", "寒い": "好冷",
+    "最高": "太棒了", "ナイス": "Nice",
 }
 _FIXED_STRIP_RE = re.compile(r"[\s、。,.!?！？…~〜]+")
 
