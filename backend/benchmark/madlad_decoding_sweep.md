@@ -44,3 +44,21 @@ Same MADLAD model loaded **once**; only decoding kwargs varied per config (model
 
 **4. 如果都無法解決...**
 不適用——`no_repeat_ngram_size=3` 這組確實解決了，不需要更複雜的 workaround。
+
+## Live-session follow-up: length_penalty (2026-09-26)
+
+First High-preset live test (RTX 4070 Ti) showed MADLAD padding and duplicating short utterances even with `no_repeat_ngram_size=3` (e.g. すごいな → 「真是太棒了，這麼多年來，我從來沒有見過這樣的東西。」, 懐かしいね → 「很想念, 很難忘, 太想念了。」). All 70 translation units of that session were saved as a text-only regression set, `translation_dataset_live.py` (no audio kept, so translation side only), and run offline with `run_live_regression.py` on the live set plus the original dataset. Offline decoding with the production config reproduced the live output 70/70.
+
+Length measurement on the production output: acceptable translations stay at <= ~1.33x output/input tokens; padded or duplicated ones have a median of ~1.86x.
+
+| Config (on top of beam 4 + no_repeat_ngram_size=3) | Live set changed | Result |
+|---|---|---|
+| hard `max_decoding_length` = 1.5x+2 | 19/70 | Rejected: truncates mid-sentence (「真是令人驚歎，這麼多」) |
+| n-best (4 finished hyps), pick best within 1.3x/1.5x | 9/70, 7/70 | Safe but weak: fixes the D-style loop, most padding untouched |
+| `length_penalty=0.0` | 36/70 | Most padding removed, but more regressions, incl. CASE1 rewording |
+| **`length_penalty=0.5`** | 28/70 | **Adopted.** ~15 live + ~9 original improved, ~5 mild regressions, CASE1/CASE4/CASE5 unchanged |
+| `length_penalty=0.5` + n-best 1.5x | 29/70 | Same as 0.5 alone, no extra gain |
+
+Improved with 0.5: だから初めてわあ (loop → 「所以，這是第一次，哇，哇。」), なんだけどあなた (drops the invented 「你是這麼的可愛」), 懐かしいね, これは, 地上に出たら家族に会える喜びもある, D08 (drops 「哈哈哈」). Mild regressions: 初コラボ → 「首次合作合作。」, 名が刻まれる → 「刻有名字的名字。」, one sentence ending on a dangling 「但是，」. Latency unchanged (~570ms avg).
+
+Not fixed by any decoding setting: the worst padding (すごいな, 懐かしいな, でも京子ちゃん, 毎日2回行動). All 4 beam hypotheses are padded there, so this is model behavior, not decoding. Member names (フブちゃん → 胡佛, etc.) are also unaffected and need a separate fix.
