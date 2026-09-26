@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import os
 import subprocess
 import sys
+import time
 
 import config
 import transcriber
@@ -15,9 +17,18 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
+log_handlers = [logging.StreamHandler()]
+log_path = None
+if config.LOG_TO_FILE:
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), config.LOG_DIR)
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, time.strftime("backend_%Y%m%d_%H%M%S.log"))
+    log_handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=log_handlers,
 )
 
 logger = logging.getLogger("main")
@@ -35,6 +46,8 @@ def log_gpu_state(label):
 
 
 if __name__ == "__main__":
+    if log_path:
+        logger.info("Logging to %s", log_path)
     logger.info("Hardware preset: %s", config.HARDWARE_PRESET)
     logger.info("STT: Kotoba / %s", config.STT_DEVICE.upper())
     logger.info("Translation: MADLAD / %s", config.TRANSLATION_DEVICE.upper())

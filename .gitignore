@@ -8,6 +8,10 @@ backend/venv/
 # and the .md summary reports are tracked (see README).
 backend/benchmark/*.wav
 backend/benchmark/*.json
+backend/benchmark/*.log
 
 # Session audio saved by SAVE_SESSION_AUDIO (stream audio, stays local)
 backend/recordings/
+
+# Backend console logs written by LOG_TO_FILE (contain live transcripts)
+backend/logs/

@@ -66,8 +66,15 @@ TRANSCRIBE_TIMEOUT_SECONDS = 12
 # (relative to backend/), so a live session can be replayed offline for STT /
 # Translation Buffer tuning. About 115MB per hour. It is the stream's audio,
 # so it stays local (git-ignored). Doesn't affect subtitles either way.
-SAVE_SESSION_AUDIO = False
+SAVE_SESSION_AUDIO = True
 SESSION_AUDIO_DIR = "recordings"
+
+# Also write the console log to LOG_DIR (relative to backend/), one file per
+# backend start, so a live session can be analyzed without copy-pasting the
+# console. About 3MB per hour (mostly the per-chunk "Audio received" lines).
+# Git-ignored.
+LOG_TO_FILE = True
+LOG_DIR = "logs"
 
 # Japanese -> Traditional Chinese translation of finalized text only.
 # MADLAD-400 3B (ctranslate2, int8) — chosen over NLLB 600M/1.3B after the
@@ -91,6 +98,10 @@ TRANSLATION_NO_REPEAT_NGRAM_SIZE = 3
 # 0.0 over-shortened. Calibrated in benchmark/madlad_decoding_sweep.md
 # (live-session section).
 TRANSLATION_LENGTH_PENALTY = 0.5
+# Drop a clause of the Chinese output that just repeats an earlier one in
+# other words ("我太緊張了，我很緊張。" -> "我太緊張了。"); see
+# translator.drop_repeated_clauses. False turns it off.
+TRANSLATION_DROP_REPEATED_CLAUSES = True
 OPENCC_CONFIG = "s2twp"  # Simplified -> Taiwan Traditional with phrase conversion
 
 # Translation Sentence Buffer (server.py) v2: merges consecutive STT final
@@ -112,14 +123,15 @@ OPENCC_CONFIG = "s2twp"  # Simplified -> Taiwan Traditional with phrase conversi
 TRANSLATION_BOUNDARY_SILENCE_MS = 800  # real audio gap needed to end a translation unit
 TRANSLATION_MAX_AUDIO_SECONDS = 7.0  # force-flush once the unit's speech span exceeds this
 TRANSLATION_MAX_CHARS = 70  # force-flush once buffered text reaches this many JA characters
-# Pure safety net for "no further STT final ever arrives" (speaker stopped
-# talking / stream ended) — NOT the primary boundary decision (the real-audio
-# gap above is); this only prevents a pending unit from waiting forever with
-# nothing left to compare it against. In practice this fires far more often
-# than the real-gap check on typical content (see benchmark sweep below), so
-# it's also the dominant latency contributor — calibrated via a 4-point sweep
-# on test_clip.wav (0.9/1.2/1.5/2.0s): 1.2s hit the ~1.5-2.5s target avg
-# latency (2088ms measured) without producing obviously-wrong merges, while
-# shorter values (0.9s) suppressed merging almost entirely and longer values
-# (1.5s+) pushed latency over target for only marginal merge-quality gains.
-TRANSLATION_IDLE_FLUSH_S = 1.2
+# How long a finished STT final waits for the next one before being
+# translated on its own (the "no further STT final arrives" case). Was 1.2s
+# (4-point sweep on test_clip.wav). Live High-preset sessions showed that wait
+# almost never produced a merge (0 of 68 units in the recorded session), so it
+# only delayed the Chinese line: it appeared 1.8s after the Japanese final,
+# by which time the Japanese line had already moved to the next sentence 46%
+# of the time. Replaying that recording (benchmark/replay_session.py) at 1.2 /
+# 0.6 / 0.0s: Chinese ready 1.82 / 1.13 / 0.56s after the final, "late" 49% /
+# 25% / 15%, and identical translations for every sentence both runs shared.
+# 0.0 = translate as soon as a final arrives (units still merge if several
+# finals are already queued, and the max caps above still apply).
+TRANSLATION_IDLE_FLUSH_S = 0.0

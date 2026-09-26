@@ -62,3 +62,11 @@ Length measurement on the production output: acceptable translations stay at <= 
 Improved with 0.5: だから初めてわあ (loop → 「所以，這是第一次，哇，哇。」), なんだけどあなた (drops the invented 「你是這麼的可愛」), 懐かしいね, これは, 地上に出たら家族に会える喜びもある, D08 (drops 「哈哈哈」). Mild regressions: 初コラボ → 「首次合作合作。」, 名が刻まれる → 「刻有名字的名字。」, one sentence ending on a dangling 「但是，」. Latency unchanged (~570ms avg).
 
 Not fixed by any decoding setting: the worst padding (すごいな, 懐かしいな, でも京子ちゃん, 毎日2回行動). All 4 beam hypotheses are padded there, so this is model behavior, not decoding. Member names (フブちゃん → 胡佛, etc.) are also unaffected and need a separate fix.
+
+## Live-session follow-up 2: repeated-clause removal (2026-09-26)
+
+The second High-preset live session still showed MADLAD restating a clause in other words ("我太緊張了，我很緊張。", "沒有寫名字，也沒有寫姓名。"). No decoding setting removes this (see above), so `translator.drop_repeated_clauses` post-processes the Chinese output: a later clause is dropped when 80%+ of its characters already appeared earlier, or 60%+ when the new characters are only function words (很, 而且, 在...).
+
+Checked on 114 multi-clause outputs (live set + original set + the second session + synthetic parallel sentences). A single character-overlap threshold could not separate duplicates from real parallel clauses: at 0.75, "我喜歡貓，我喜歡狗" was cut; at 0.8, "我太緊張了，我很緊張" was missed. The function-word condition fixes both: 21 changed, all genuine restatements (e.g. "她的英語也很好，而且她的英語很好。" → "她的英語也很好。"), and none of the parallel sentences ("我喜歡貓，我喜歡狗", "他去了東京，她去了大阪", "我吃了飯，也洗了澡") were touched. One borderline cut: D12 loses its trailing "這樣組合也可以", in an output that was already incomplete. CASE1/CASE4/CASE5 are unchanged. Toggle: `TRANSLATION_DROP_REPEATED_CLAUSES` in config.py.
+
+Short whole utterances are now handled before MADLAD by the fixed-translation table in `glossary.py` (ありがとうございます → 謝謝 instead of "感謝您傳送編修。", さすがに → 果然 instead of "事實上，這一切都是為了你。"). This hit 20 entries across the two benchmark sets, all correct.

@@ -22,7 +22,7 @@ import re
 
 # Honorific that may follow a name -> what it becomes after the name.
 # 先輩/先生 stay Japanese: as 前輩/老師 MADLAD reads "吹雪前輩" as "吹雪的前輩".
-HONORIFICS = {"ちゃん": "", "さん": "", "くん": "", "様": "", "先輩": "先輩", "先生": "先生"}
+HONORIFICS = {"ちゃん": "", "さん": "", "くん": "", "様": "", "さま": "", "先輩": "先輩", "先生": "先生"}
 
 MEMBERS = [
     # ---- JP 0th gen ----
@@ -46,7 +46,7 @@ MEMBERS = [
     (["癒月ちょこ", "ちょこ~"], "巧可"),
     (["大空スバル", "スバル"], "大空昴"),
     # ---- JP GAMERS ----
-    (["大神ミオ", "ミオしゃ", "ミオ"], "大神澪"),
+    (["大神ミオ", "ミオしゃ", "ミオシャ", "ミオ"], "大神澪"),
     (["猫又おかゆ", "おかゆん", "おかゆ~"], "貓又小粥"),
     (["戌神ころね", "ころさん", "ころね"], "戌神沁音"),
     # ---- JP 3rd gen ----
@@ -59,8 +59,8 @@ MEMBERS = [
     # ---- JP 4th gen ----
     (["天音かなた", "かなたん", "かなた~"], "天音"),
     (["桐生ココ", "ココ会長", "ココ~"], "桐生可可"),
-    (["角巻わため", "わためぇ", "わため"], "角卷"),
-    (["常闇トワ", "トワ~"], "Towa"),
+    (["角巻わため", "わためぇ", "わため", "ワタメ"], "角卷"),
+    (["常闇トワ", "トワち", "トワチ", "トワ~", "とわ~"], "Towa"),
     (["姫森ルーナ", "ルーナ"], "姬森璐娜"),
     # ---- JP 5th gen ----
     (["雪花ラミィ", "ラミィ"], "雪花菈米"),
@@ -114,7 +114,7 @@ MEMBERS = [
 # Common stream vocabulary. Only terms that translated better replaced than
 # left alone are kept; コラボ->連動, 歌枠->歌回, 凸待ち, 箱推し and 先輩->前輩
 # all made the output worse (連動 is itself a Japanese word, 歌回 became
-# "唱歌回去"), so MADLAD handles those itself.
+# "唱歌回去"), so MADLAD handles those itself; 箱押し/箱推し too.
 TERMS = {
     "ホロライブ": "hololive",
     "ホロメン": "holo成員",
@@ -124,6 +124,10 @@ TERMS = {
     "スパチャ": "SC",
     "メン限": "會員限定",
     "同接": "同時觀看人數",
+    "会長": "會長",  # left as-is MADLAD made it "董事會主席"
+    "マネちゃん": "經紀人",
+    "マネージャー": "經紀人",
+    "クソコラ": "惡搞圖",
     "リスナーさん": "聽眾",
     "リスナー": "聽眾",
 }
@@ -154,33 +158,60 @@ def _replace_name(m):
     return _ZH_BY_FORM[form] + (HONORIFICS[hon] if hon else "")
 
 
+# "N期生" (Nth generation) -> "N期成員": left alone MADLAD reads 4期生 as
+# "四年級的學生" (4th-grade student).
+_GENERATION_RE = re.compile(r"([0-9０-９一二三四五六七八九]+)期生")
+
+
 def apply(text: str) -> str:
     text = _NAME_RE.sub(_replace_name, text)
+    text = _GENERATION_RE.sub(lambda m: m.group(1) + "期成員", text)
     return _TERM_RE.sub(lambda m: TERMS[m.group(0)], text)
 
 
-# Whole-utterance interjections/fillers -> fixed translation, bypassing MADLAD.
-# Alone, these give MADLAD nothing to translate and it invents a sentence
-# (ああ -> "哦，是的，我很喜歡它。", で -> "並且在 的情況下。", あの -> "那個女孩，
-# 那個女人，那位女人。"). Only exact matches of the whole utterance (ignoring
-# punctuation) use this; anything longer still goes to MADLAD.
-FILLERS = {
+# Whole utterances that get a fixed translation instead of going to MADLAD.
+# Alone, short interjections and reactions give MADLAD nothing to translate,
+# so it invents a sentence (ああ -> "哦，是的，我很喜歡它。", さすがに -> "事實上，
+# 這一切都是為了你。", ありがとうございます -> "感謝您傳送編修。"). Only an exact
+# match of the whole utterance (ignoring punctuation) uses this; anything
+# longer still goes to MADLAD, so add only phrases whose meaning doesn't
+# depend on context (no やばい: praise or alarm depending on tone).
+FIXED_UTTERANCES = {
+    # interjections / fillers
     "ああ": "啊", "あー": "啊", "あぁ": "啊",
     "うわ": "哇", "うわー": "哇", "うわぁ": "哇", "わあ": "哇", "わー": "哇", "わぁ": "哇",
     "え": "欸", "えっ": "欸", "えー": "欸", "えぇ": "欸",
     "おお": "喔", "おー": "喔", "おっ": "喔", "おぉ": "喔",
-    "へえ": "欸", "へー": "欸", "ほう": "喔",
+    "へえ": "欸", "へー": "欸", "ほう": "喔", "ふん": "哼",
     "うん": "嗯", "うんうん": "嗯嗯", "ううん": "不是", "うーん": "嗯……",
     "はい": "好", "で": "然後", "まあ": "嗯", "あの": "那個", "なんか": "那個……",
-    "えっと": "呃", "えーと": "呃", "えーっと": "呃",
+    "えっと": "呃", "えーと": "呃", "えーっと": "呃", "あれ": "咦", "ん": "嗯",
+    # short reactions
+    "ありがとう": "謝謝", "ありがとうね": "謝謝", "ありがとうございます": "謝謝",
+    "ありがとうございました": "謝謝",
+    "ごめん": "抱歉", "ごめんね": "抱歉", "ごめんなさい": "對不起",
+    "すごい": "好厲害", "すごいな": "好厲害", "すごいね": "好厲害", "本当にすごい": "真的好厲害",
+    "懐かしい": "好懷念", "懐かしいな": "好懷念啊", "懐かしいね": "好懷念呢",
+    "かわいい": "好可愛", "可愛い": "好可愛",
+    "恥ずかしい": "好害羞", "寂しい": "好寂寞", "寂しいよ": "好寂寞喔",
+    "心配だね": "真讓人擔心", "嬉しい": "好開心", "楽しい": "好開心", "面白い": "好有趣",
+    "大丈夫": "沒事", "さすが": "不愧是", "さすがに": "果然",
+    "なるほど": "原來如此", "そうだね": "對啊", "そうだよね": "對吧", "そうそう": "對對",
+    "本当": "真的", "本当に": "真的", "ほんと": "真的",
+    "分かりました": "我知道了", "わかりました": "我知道了", "了解": "了解",
+    "おめでとう": "恭喜", "お疲れ様": "辛苦了", "おつかれ": "辛苦了",
+    "よろしく": "請多指教", "よろしくお願いします": "請多指教",
+    "おはよう": "早安", "こんにちは": "你好", "こんばんは": "晚上好", "おやすみ": "晚安",
+    "ただいま": "我回來了", "おかえり": "歡迎回來", "いらっしゃい": "歡迎",
+    "やった": "太好了", "よし": "好", "逆に": "反而", "なんでなんで": "為什麼為什麼",
 }
-_FILLER_STRIP_RE = re.compile(r"[\s、。,.!?！？…~〜]+")
+_FIXED_STRIP_RE = re.compile(r"[\s、。,.!?！？…~〜]+")
 
 
-def filler(text: str):
-    """Fixed translation if the whole utterance is a filler, else None.
-    Keeps a trailing ? or ! so "え?" becomes "欸？"."""
-    zh = FILLERS.get(_FILLER_STRIP_RE.sub("", text))
+def fixed(text: str):
+    """Fixed translation if the whole utterance is in FIXED_UTTERANCES, else
+    None. Keeps a trailing ? or ! so "え?" becomes "欸？"."""
+    zh = FIXED_UTTERANCES.get(_FIXED_STRIP_RE.sub("", text))
     if zh is None:
         return None
     tail = text.rstrip()[-1:]

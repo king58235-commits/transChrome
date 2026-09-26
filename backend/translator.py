@@ -1,6 +1,7 @@
 import importlib.util
 import logging
 import os
+import re
 import sys
 from collections import namedtuple
 
@@ -41,6 +42,7 @@ from config import (
     TRANSLATION_COMPUTE_TYPE_CPU,
     TRANSLATION_COMPUTE_TYPE_GPU,
     TRANSLATION_DEVICE,
+    TRANSLATION_DROP_REPEATED_CLAUSES,
     TRANSLATION_LENGTH_PENALTY,
     TRANSLATION_MODEL_REPO,
     TRANSLATION_NO_REPEAT_NGRAM_SIZE,
@@ -63,6 +65,40 @@ def _run(translator, sp, text: str) -> str:
         length_penalty=TRANSLATION_LENGTH_PENALTY,
     )
     return sp.decode(results[0].hypotheses[0])
+
+
+# MADLAD often says the same thing twice in different words ("我太緊張了，
+# 我很緊張。", "因為我們沒辦法一起合作，因為我們不能一起合作。"). A later clause
+# is dropped when nearly all its characters already appeared earlier: 80%+
+# overlap, or 60%+ where the new characters are only function words (很, 而且,
+# 在...). The function-word condition is what keeps real parallel clauses like
+# "我喜歡貓，我喜歡狗" (new character 狗 is content). Calibrated on the live and
+# original benchmark sets plus the second live session, see
+# benchmark/madlad_decoding_sweep.md.
+_CLAUSE_SPLIT_RE = re.compile(r"([，,；;、]\s*)")
+_CONTENT_CHAR_RE = re.compile(r"[一-鿿぀-ヿA-Za-z0-9]")
+_FUNCTION_CHARS = set("很太也都還又就了的是在得著過呢吧啊嗎呀哦喔而且和與或者最真非常點些個這那麼樣")
+
+
+def drop_repeated_clauses(text: str) -> str:
+    parts = _CLAUSE_SPLIT_RE.split(text)
+    clauses, separators = parts[0::2], parts[1::2] + [""]
+    kept, seen = [], set()
+    for clause, sep in zip(clauses, separators):
+        chars = set(_CONTENT_CHAR_RE.findall(clause))
+        if kept and len(chars) >= 2:
+            overlap = len(chars & seen) / len(chars)
+            if overlap >= 0.8 or (overlap >= 0.6 and chars - seen <= _FUNCTION_CHARS):
+                continue
+        kept.append(clause + sep)
+        seen |= chars
+    if len(kept) == len(clauses):
+        return text
+    result = "".join(kept).rstrip("，,；;、 ")
+    end = text.rstrip()[-1:]
+    if end in "。？！?!" and not result.endswith(end):
+        result += end
+    return result
 
 
 def load_model():
@@ -110,9 +146,9 @@ def translate(japanese_text: str) -> TranslationResult:
         return TranslationResult("", "")
     if not japanese_text.strip():
         return TranslationResult("", "")
-    fixed = glossary.filler(japanese_text)
+    fixed = glossary.fixed(japanese_text)
     if fixed is not None:
-        logger.info("[FILLER] %s -> %s", japanese_text, fixed)
+        logger.info("[FIXED] %s -> %s", japanese_text, fixed)
         return TranslationResult(fixed, fixed)
     try:
         source_text = glossary.apply(japanese_text)
@@ -120,6 +156,11 @@ def translate(japanese_text: str) -> TranslationResult:
             logger.info("[GLOSSARY] %s -> %s", japanese_text, source_text)
         zh_hans = _run(_translator, _sp, source_text)
         zh_tw = _converter.convert(zh_hans)
+        if TRANSLATION_DROP_REPEATED_CLAUSES:
+            deduped = drop_repeated_clauses(zh_tw)
+            if deduped != zh_tw:
+                logger.info("[DEDUP] %s -> %s", zh_tw, deduped)
+                zh_tw = deduped
         return TranslationResult(zh_hans, zh_tw)
     except Exception:
         logger.exception("Translation failed for: %r", japanese_text)
