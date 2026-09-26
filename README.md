@@ -15,9 +15,9 @@ Chrome Tab Audio
       → Japanese partial / final 結果
       → （只有 final）Translation Sentence Buffer：依「真實 audio 停頓時間」合併相鄰 STT final，
         避免一句話因為 STT 的短停頓斷句被拆成沒有上下文的片段分別翻譯
-      → MADLAD-400 3B int8（ctranslate2，裝置依 Hardware Preset 決定）→ OpenCC s2twp → 繁體中文（台灣用字）
+      → Sakura-7B（llama.cpp llama-server，GPU 常駐）→ OpenCC s2twp → 繁體中文（台灣用字）
   → WebSocket 送回 Extension（partial / final / translation 三種訊息各自獨立）
-  → content.js 更新 YouTube 播放器上的雙語字幕 Overlay（日文小字在上持續更新，繁中大字在下、final 才更新）
+  → content.js 更新 YouTube 播放器上的字幕 Overlay（由上到下照時間順序：最多 3 組「日文原文＋中文翻譯」，最下方是正在說的日文）
 ```
 
 **串流字幕的運作方式**：講話期間，backend 每 ~0.75 秒把目前這句「還沒講完」的音訊整段重新辨識一次，當作可被覆寫的 `partial` 送回去顯示；偵測到語音停頓（或講超過 8 秒還沒停頓）就用較高品質設定做最後一次辨識，當作 `final` 送出並鎖定顯示，同時清空 buffer 開始下一句。沒有做增量式的 confirmed-prefix 演算法（像 Whisper-Streaming 那樣） — GPU 加速後單次辨識已經快到可以每次整段重跑，不需要那層複雜度。
@@ -33,10 +33,11 @@ Chrome Tab Audio
 
 啟動時 console 會明確印出目前模式，例如：
 ```
-Hardware preset: balanced
+Hardware preset: high
 STT: Kotoba / CUDA
-Translation: MADLAD / CPU
+Translation: Sakura-7B / CUDA (llama.cpp b11200)
 ```
+（Hardware Preset 目前只影響 STT 與 legacy MADLAD 的裝置；Sakura-7B 固定整個跑在 GPU 上。）
 若 `HARDWARE_PRESET` 設成不支援的值，啟動時會直接報錯並列出合法值，不會靜默 fallback。目前只有 `balanced`/`high` 兩檔；純 CPU（含 STT）已實測不可行（Kotoba CPU realtime factor 2.622，處理速度比音訊本身還慢），故未提供第三檔，詳見 `backend/benchmark/hardware_compat_matrix.md`。
 
 **其他目前正式參數**（`backend/config.py`）：
@@ -44,8 +45,12 @@ Translation: MADLAD / CPU
 | 參數 | 值 | 用途 |
 |---|---|---|
 | `STT_MODEL` | `kotoba` | 對應 `STT_MODEL_PRESETS["kotoba"]` = `kotoba-tech/kotoba-whisper-v2.0-faster`。可切換 `small`/`medium`/`kotoba`，比較結果見 `backend/benchmark/result_*.json` |
-| `TRANSLATION_MODEL_REPO` | `Heng666/madlad400-3b-mt-ct2-int8` | MADLAD-400 3B，選型依據見 `backend/benchmark/translation_model_comparison.md` |
-| `TRANSLATION_NO_REPEAT_NGRAM_SIZE` | 3 | 修掉 MADLAD 短句重複迴圈問題的 decoding 參數，校準依據見 `backend/benchmark/madlad_decoding_sweep.md` |
+| `TRANSLATION_BACKEND` | `sakura` | 正式翻譯模型 Sakura-7B（`SAKURA_MODEL_REPO`/`SAKURA_MODEL_FILE` = `SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF` 的 `iq4xs`，第一次啟動自動下載到 Hugging Face 快取）。2026-09-26 離線比較（MADLAD、Sakura-1.5B、Sakura-7B、Qwen2.5-7B，同一批直播字幕句）中品質最好且每句平均 0.11 秒（MADLAD 0.51 秒）。改成 `madlad` 可切回舊的 MADLAD（legacy，程式與設定保留以便 rollback） |
+| `LLAMA_CPP_RELEASE` / `LLAMA_SERVER_DIR` | `b11200` / `runtime/llama.cpp` | Sakura 用的 llama.cpp 官方 Windows CUDA 版，由 `setup_llama.py` 安裝，不進 Git |
+| `SAKURA_MAX_TOKENS_*` | 每字 2、最少 32、上限 320 | 輸出保護：每句最多輸出的 token 數；另外生成中出現同一段字重複 8 次以上會立刻中止 |
+| `STT_HALLUCINATION_TEXTS` / `STT_HALLUCINATION_MAX_SPEECH_S` | `{"ごめん"}` / 0.3s | Whisper 在幾乎無聲的片段上會幻聽出「ごめん」：整句只有這個詞、且人聲不到 0.3 秒時丟棄（不顯示不翻譯）。依據：實測 log 中 17 次 ごめん 全部人聲 < 0.2 秒 |
+| `AUDIO_GAP_LOG_S` | 1.0s | 卡頓診斷（只記錄）：超過此時間沒收到音訊時記 `[GAP]`；另有 `[LOOP LAG]`、`[SAKURA] slow generation`、`[SLOW SEND]`，以及擴充功能回報的 `[CLIENT DIAG]`（capture_gap／send_backlog） |
+| `TRANSLATION_MODEL_REPO` 等 | MADLAD 設定 | 只在 `TRANSLATION_BACKEND = "madlad"` 時使用 |
 | `LOG_TO_FILE` | True | console log 同時寫進 `backend/logs/backend_*.log`（約 3MB／小時，不進 Git），live 測試後不用再手動複製 log |
 | `SAVE_SESSION_AUDIO` | False | 設成 `True` 時，每次「開始字幕」會把收到的音訊另存成 `backend/recordings/session_*.wav`（約 115MB／小時，不進 Git），供之後離線重跑 STT／翻譯合併測試；不影響字幕 |
 | `TRANSLATION_LENGTH_PENALTY` | 0.5 | 讓 beam search 偏好較短的完整譯文，減少短句「自己加戲／同義重複」，校準依據同上（live-session 段落） |
@@ -65,7 +70,7 @@ Translation: MADLAD / CPU
 | `background.js` | Service worker：tabCapture 協調、offscreen document 生命週期、狀態管理（用 `chrome.storage.session`，因為 service worker 會被 Chrome 回收，不能用一般變數存狀態）、字幕轉發給 content script |
 | `offscreen.js` | 實際擷取分頁音訊（`getUserMedia`）、接回喇叭讓使用者仍聽得到聲音、透過 AudioWorklet 降頻、WebSocket 收送 |
 | `worklet-processor.js` | AudioWorklet：把原生取樣率降到 16kHz mono PCM16 |
-| `content.js` | 在 YouTube 播放器 DOM 上掛雙語字幕 overlay：日文小字在上（partial/final 即時更新）、繁中大字在下（只在翻譯完成時更新，不會因日文 partial 更新而閃爍消失） |
+| `content.js` | 在 YouTube 播放器 DOM 上掛字幕 overlay：最多 3 組「日文原文＋中文」（最新 100%、次新 85%、最舊淡出；每組依字數保證最短顯示時間 `clamp(1.5 + 字數×0.08, 1.5, 5)` 秒），合併翻譯會更新最新一組而不重複；最下方是正在說的日文，該句翻譯到達後清空 |
 | `popup.html` / `popup.js` | 開始/停止按鈕、Backend 連線狀態顯示 |
 | `styles.css` | popup 樣式 + 字幕 overlay 樣式 |
 
@@ -76,10 +81,12 @@ Translation: MADLAD / CPU
 | `server.py` | WebSocket 連線處理、partial/final 觸發邏輯、逾時保護 |
 | `audio_buffer.py` | 累積收到的 PCM16 音訊 |
 | `transcriber.py` | faster-whisper 封裝：模型載入（含 CUDA 能力偵測與 CPU fallback）、GPU DLL 路徑註冊、VAD 停頓偵測與真實語音時間擷取、partial/final 兩種辨識設定 |
-| `translator.py` | 獨立翻譯模組（刻意不 import transcriber.py，與 STT 解耦）：MADLAD 模型載入（裝置依 `HARDWARE_PRESET` 決定，不再自動 CUDA→CPU fallback，因為裝置已是明確選擇）、日文→簡中翻譯、OpenCC 轉台灣繁中，翻譯失敗永遠回傳空字串、不拋例外 |
+| `translator.py` | 獨立翻譯模組（刻意不 import transcriber.py，與 STT 解耦）：依 `TRANSLATION_BACKEND` 呼叫 Sakura 或 legacy MADLAD、字典前後處理、OpenCC 轉台灣繁中，翻譯失敗永遠回傳空字串、不拋例外 |
+| `sakura.py` | Sakura-7B 後端：backend 啟動時開一個 llama-server 程序並常駐 GPU（每句不重新載入），透過本機 HTTP 翻譯；每次啟動產生隨機 API 金鑰；用 Windows job object 綁定 backend，backend 結束（含關視窗、當掉）時 llama-server 一定跟著結束 |
+| `setup_llama.py` | 下載並安裝 llama.cpp runtime 到 `backend/runtime/llama.cpp`（setup.bat 會自動執行，已安裝就略過） |
 | `glossary.py` | 翻譯前處理：整句只有語助詞或常用短句（ありがとうございます、懐かしい…）時直接給固定譯文；其餘句子再做人名／用語字典替換：把 hololive 成員名與常用直播用語換成固定的中文（或英文）寫法，避免 MADLAD 亂音譯（例如 フブちゃん → 胡佛）。可自行增修，新增名字前先確認 MADLAD 不會把它當一般詞翻譯（說明見檔案開頭）。`STT_FIXES` 放反覆出現的固定聽錯（例如 また目／渡辺 → わため），只收在實際 log 中重複出現、且錯誤寫法在該位置不是一般用詞的項目 |
 | `config.py` | 所有可調參數（STT 模型選擇、VAD 閾值、翻譯合併門檻等，見上方「目前正式參數」） |
-| `test_client.py` | 不需要 Chrome，直接送合成音訊測試 backend 的除錯工具 |
+| `test_client.py` | 不需要 Chrome 的測試工具：不帶參數送 4 秒靜音；帶錄音檔（`test_client.py <wav> [秒數]`）會即時串流並印出日文 final 與中文翻譯 |
 | `benchmark/` | 模型/硬體比較工具與長期參考資料：`recorder.py`（錄固定測試音訊）、`run_model.py`/`run_translation_model.py`/`run_madlad_decoding_sweep.py`（STT/翻譯模型與 decoding 參數跑分）、`test_*.py`（硬體相容性測試）、`translation_dataset.py`（固定 70 句翻譯測試集）、三份 `.md` 比較報告。原始逐句 JSON 輸出跟測試音訊本身（`.wav`，內含真實直播內容，有版權疑慮）不進 Git，只保留腳本、資料集跟摘要報告 |
 | `setup.bat` | 一鍵建立 venv + 安裝套件 |
 | `start.bat` | 一鍵啟動 backend |
@@ -95,7 +102,7 @@ Translation: MADLAD / CPU
    cd backend
    setup.bat
    ```
-   會在**全新一台電腦、完全沒有 venv 的狀態下**自動建立虛擬環境並安裝 `requirements.txt` 裡的所有套件（已實測驗證：用一份乾淨、沒有任何手動裝過套件的 venv 跑過，requirements.txt 本身就足夠讓 Kotoba+MADLAD 兩個模型成功載入並跑出真實翻譯結果）。這步會下載約 1.3GB 的 NVIDIA CUDA runtime（cuBLAS/cuDNN），不需要另外安裝完整 CUDA Toolkit。
+   會在**全新一台電腦、完全沒有 venv 的狀態下**自動建立虛擬環境並安裝 `requirements.txt` 裡的所有套件（已實測驗證：用一份乾淨、沒有任何手動裝過套件的 venv 跑過，requirements.txt 本身就足夠讓 Kotoba+MADLAD 兩個模型成功載入並跑出真實翻譯結果）。這步會下載約 1.3GB 的 NVIDIA CUDA runtime（cuBLAS/cuDNN/cudart），不需要另外安裝完整 CUDA Toolkit；最後會執行 `setup_llama.py` 下載 llama.cpp runtime（約 260MB，GitHub 單線下載常被限速，所以用多線分段下載）。
 3. **選擇硬體 preset**：打開 `backend/config.py`，確認 `HARDWARE_PRESET` 設成符合你新電腦顯卡的值：
    ```python
    HARDWARE_PRESET = "balanced"  # 顯存偏緊的卡，例如 RTX 3050 8GB
@@ -111,7 +118,7 @@ Translation: MADLAD / CPU
    ```
    第一次啟動會從 Hugging Face **自動下載模型**（不依賴這台公司電腦既有的任何快取，新電腦會是全新下載）：
    - Kotoba-whisper（約 1.5GB）
-   - MADLAD-400 3B（約 3GB）
+   - Sakura-7B（約 4.3GB）
 
    下載完會快取在 `%USERPROFILE%\.cache\huggingface\hub`，之後每次啟動不用重下。**第一次啟動需要較大的磁碟空間（建議預留 10GB 以上）跟網路連線，時間會明顯比之後久**；等到 console 出現 `server listening on 127.0.0.1:8765` 就代表完成。
    - 如何清除模型快取：直接刪除 `%USERPROFILE%\.cache\huggingface\hub` 底下對應的 `models--*` 資料夾即可，重開 backend 會自動重新下載

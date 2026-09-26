@@ -12,6 +12,7 @@ import transcriber
 import translator
 from audio_buffer import BYTES_PER_SECOND, AudioBuffer
 from config import (
+    AUDIO_GAP_LOG_S,
     CHANNELS,
     HOST,
     MAX_CHUNK_SECONDS,
@@ -23,6 +24,8 @@ from config import (
     SAMPLE_WIDTH_BYTES,
     SAVE_SESSION_AUDIO,
     SESSION_AUDIO_DIR,
+    STT_HALLUCINATION_MAX_SPEECH_S,
+    STT_HALLUCINATION_TEXTS,
     TRANSCRIBE_TIMEOUT_SECONDS,
     TRANSLATION_BOUNDARY_SILENCE_MS,
     TRANSLATION_IDLE_FLUSH_S,
@@ -41,6 +44,17 @@ _REPEATED_CHAR_RE = re.compile(r"(.)\1{5,}")
 _WORD_CHAR_RE = re.compile(r"[^\W_]", re.UNICODE)
 
 TRANSLATION_BOUNDARY_SILENCE_S = TRANSLATION_BOUNDARY_SILENCE_MS / 1000
+
+_HALLUCINATION_STRIP_RE = re.compile(r"[\s、。,.!?！？…~〜ー]+")
+
+
+def is_hallucination(text, speech_start_s, speech_end_s):
+    """True for a known Whisper hallucination on a nearly speechless chunk,
+    see config.STT_HALLUCINATION_TEXTS."""
+    if _HALLUCINATION_STRIP_RE.sub("", text) not in STT_HALLUCINATION_TEXTS:
+        return False
+    speech_s = 0.0 if speech_start_s is None else speech_end_s - speech_start_s
+    return speech_s < STT_HALLUCINATION_MAX_SPEECH_S
 
 
 def should_translate(text: str) -> tuple[bool, str]:
@@ -93,6 +107,9 @@ async def handler(websocket):
     segment_start_audio_pos = 0.0
     session_start_wallclock = time.monotonic()
 
+    # Stall diagnostics, see AUDIO_GAP_LOG_S. Only read for logging.
+    diag = {"last_audio_at": None, "max_loop_lag": 0.0, "translating": None}
+
     stt_final_queue = asyncio.Queue()  # (segment_id, text, speech_start_s, speech_end_s)
     translation_queue = asyncio.Queue()  # (unit_id, source_segments, text, speech_start_s, last_speech_end_s)
 
@@ -128,10 +145,12 @@ async def handler(websocket):
                     logger.warning("[TRANSLATE QUEUE] backlog: %d pending", qsize)
                 logger.info("[TRANSLATE START #%d]", unit_id)
                 started = time.monotonic()
+                diag["translating"] = (unit_id, started)
                 result = await loop.run_in_executor(None, translator.translate, japanese_text)
+                diag["translating"] = None
                 elapsed_ms = (time.monotonic() - started) * 1000
                 if result.final:
-                    logger.info("[NLLB RAW #%d]\n%s", unit_id, result.raw)
+                    logger.info("[MODEL RAW #%d]\n%s", unit_id, result.raw)
                     logger.info("[ZH-TW #%d]\n%s", unit_id, result.final)
                     if last_speech_end_s is not None:
                         speech_end_wallclock = session_start_wallclock + last_speech_end_s
@@ -139,6 +158,7 @@ async def handler(websocket):
                         logger.info(
                             "[LATENCY #%d] speech_end_to_translation_ready=%.0fms", unit_id, speech_to_ready_ms
                         )
+                    send_started = time.monotonic()
                     await websocket.send(json.dumps({
                         "type": "translation",
                         "unit_id": unit_id,
@@ -146,6 +166,9 @@ async def handler(websocket):
                         "source_text": japanese_text,
                         "text": result.final,
                     }))
+                    send_s = time.monotonic() - send_started
+                    if send_s > 0.5:
+                        logger.warning("[SLOW SEND #%d] sending the translation to the extension took %.1fs", unit_id, send_s)
                 else:
                     logger.info("[ZH-TW #%d]\n(translation unavailable)", unit_id)
                 logger.info("[TRANSLATE DONE #%d]\nlatency=%.0f ms", unit_id, elapsed_ms)
@@ -221,7 +244,19 @@ async def handler(websocket):
             if span_s >= TRANSLATION_MAX_AUDIO_SECONDS or char_count >= TRANSLATION_MAX_CHARS:
                 await flush("max_cap")
 
+    async def loop_lag_monitor():
+        # A 0.25s sleep that wakes much later means something blocked the
+        # event loop (all audio handling, STT scheduling and sends stop too).
+        while True:
+            before = time.monotonic()
+            await asyncio.sleep(0.25)
+            lag = time.monotonic() - before - 0.25
+            diag["max_loop_lag"] = max(diag["max_loop_lag"], lag)
+            if lag > AUDIO_GAP_LOG_S:
+                logger.warning("[LOOP LAG] backend event loop was blocked for %.1fs", lag)
+
     translation_worker_task = asyncio.create_task(translation_worker())
+    loop_lag_task = asyncio.create_task(loop_lag_monitor())
     sentence_buffer_task = asyncio.create_task(sentence_buffer_worker())
 
     async def run_model(pcm_bytes, final):
@@ -271,6 +306,12 @@ async def handler(websocket):
             try:
                 text, latency_ms = await run_model(pcm_bytes, final=True)
                 if text:
+                    start_off, end_off = transcriber.get_speech_span(pcm_bytes)
+                    if is_hallucination(text, start_off, end_off):
+                        logger.info("[STT HALLUCINATION] dropped %r (%.2fs of speech)", text,
+                                    0.0 if start_off is None else end_off - start_off)
+                        text = None
+                if text:
                     segment_id = next_segment_id
                     next_segment_id += 1
                     logger.info("[FINAL JA #%d] (%.0fms)\n%s", segment_id, latency_ms, text)
@@ -278,12 +319,13 @@ async def handler(websocket):
 
                     ok, reason = should_translate(text)
                     if ok:
-                        start_off, end_off = transcriber.get_speech_span(pcm_bytes)
                         speech_start_s = chunk_start_audio_pos + start_off if start_off is not None else None
                         speech_end_s = chunk_start_audio_pos + end_off if end_off is not None else None
                         stt_final_queue.put_nowait((segment_id, text, speech_start_s, speech_end_s))
                     else:
                         logger.info("[TRANSLATE SKIPPED #%d] reason=%s", segment_id, reason)
+            except websockets.ConnectionClosed:
+                pass  # the extension stopped while this final was in flight
             finally:
                 busy = False
             return
@@ -302,12 +344,25 @@ async def handler(websocket):
                 last_partial_text = text
                 logger.info("[PARTIAL JA] (%.0fms)\n%s", latency_ms, text)
                 await websocket.send(json.dumps({"type": "partial", "text": text}))
+        except websockets.ConnectionClosed:
+            pass  # the extension stopped while this partial was in flight
         finally:
             busy = False
 
     try:
         async for message in websocket:
             if isinstance(message, bytes):
+                now = time.monotonic()
+                if diag["last_audio_at"] is not None and now - diag["last_audio_at"] > AUDIO_GAP_LOG_S:
+                    translating = diag["translating"]
+                    logger.warning(
+                        "[GAP] no audio from the extension for %.1fs | max event loop lag %.1fs | "
+                        "STT busy=%s | translation queue=%d | translating=%s",
+                        now - diag["last_audio_at"], diag["max_loop_lag"], busy, translation_queue.qsize(),
+                        f"#{translating[0]} for {now - translating[1]:.1f}s" if translating else "no",
+                    )
+                diag["last_audio_at"] = now
+                diag["max_loop_lag"] = 0.0
                 buffer.append(message)
                 if recording is not None:
                     recording.writeframes(message)
@@ -326,7 +381,9 @@ async def handler(websocket):
                     continue
 
                 msg_type = control.get("type")
-                if msg_type == "start":
+                if msg_type == "diag":
+                    logger.warning("[CLIENT DIAG] %s", {k: v for k, v in control.items() if k != "type"})
+                elif msg_type == "start":
                     logger.info("Subtitle session started")
                     buffer.clear()
                     last_partial_text = ""
@@ -336,6 +393,7 @@ async def handler(websocket):
                     audio_position_s = 0.0
                     segment_start_audio_pos = 0.0
                     session_start_wallclock = time.monotonic()
+                    diag["last_audio_at"] = None
                     if recording is not None:
                         recording.close()
                     recording = open_session_recording() if SAVE_SESSION_AUDIO else None
@@ -357,6 +415,7 @@ async def handler(websocket):
     finally:
         translation_worker_task.cancel()
         sentence_buffer_task.cancel()
+        loop_lag_task.cancel()
         if recording is not None:
             recording.close()
 

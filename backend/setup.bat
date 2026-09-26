@@ -23,5 +23,15 @@ if errorlevel 1 (
 )
 
 echo.
+echo Installing the llama.cpp runtime for the Sakura translation model...
+venv\Scripts\python.exe setup_llama.py
+if errorlevel 1 (
+    echo.
+    echo llama.cpp install failed. See the error above, then run setup.bat again.
+    pause
+    exit /b 1
+)
+
+echo.
 echo Setup complete. Run start.bat to launch the backend.
 pause

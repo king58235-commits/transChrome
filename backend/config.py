@@ -61,6 +61,18 @@ PARTIAL_INTERVAL_SECONDS = 0.75  # how often to refresh the partial preview
 # rather than blocking all future transcription for the rest of the session.
 TRANSCRIBE_TIMEOUT_SECONDS = 12
 
+# Whisper hallucination filter: a final whose whole text is one of these AND
+# whose chunk had less than STT_HALLUCINATION_MAX_SPEECH_S of VAD-detected
+# speech is dropped (not shown, not translated). A chunk that is nearly all
+# noise (cooking, eating, game sounds) gets finalized once it passes
+# MIN_CHUNK_SECONDS with a trailing pause, and Kotoba then invents a word. In
+# every live log up to 2026-09-26, all 17 ごめん finals had under 0.2s of
+# speech and none of the 471 finals with 0.3s+ was ごめん (saying it takes
+# ~0.4s). Both conditions are required: real short lines like 普通にうまい!
+# also showed up with under 0.2s measured speech.
+STT_HALLUCINATION_TEXTS = {"ごめん"}
+STT_HALLUCINATION_MAX_SPEECH_S = 0.3
+
 # Debug/benchmark aid: also save each subtitle session's received audio
 # (exactly what STT saw, 16kHz mono PCM16) as a WAV in SESSION_AUDIO_DIR
 # (relative to backend/), so a live session can be replayed offline for STT /
@@ -76,7 +88,41 @@ SESSION_AUDIO_DIR = "recordings"
 LOG_TO_FILE = True
 LOG_DIR = "logs"
 
+# Stall diagnostics (log only, no behavior change): when no audio arrives
+# from the extension for this long, log a [GAP] line with what the backend
+# was doing (event loop lag, STT busy, translation in flight). The extension
+# reports its own side ([CLIENT DIAG]: capture gaps, WebSocket send backlog).
+AUDIO_GAP_LOG_S = 1.0
+
 # Japanese -> Traditional Chinese translation of finalized text only.
+# "sakura" (production): Sakura-7B via a llama.cpp server started once at
+# backend startup and kept loaded on the GPU. Picked over MADLAD, Sakura-1.5B
+# and Qwen2.5-7B in the 09-26 offline benchmark on the fixed live/original
+# datasets: clearly better meaning accuracy (42/48 and 21/26 on MADLAD's
+# failure cases vs 19/48 and ~1/26 for MADLAD), no padding, and 4-5x faster
+# (110ms avg / 241ms P95 per sentence vs 507 / 839ms).
+# "madlad" (legacy, kept for rollback): the settings below this block.
+TRANSLATION_BACKEND = "sakura"
+
+# Sakura-7B: the exact GGUF the benchmark used (don't swap quantization
+# without re-benchmarking). Downloaded to the Hugging Face cache on first run.
+SAKURA_MODEL_REPO = "SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF"
+SAKURA_MODEL_FILE = "sakura-7b-qwen2.5-v1.0-iq4xs.gguf"
+# llama.cpp release the benchmark used, installed by setup_llama.py into
+# LLAMA_SERVER_DIR (relative to backend/, git-ignored). Always runs fully on
+# the GPU (-ngl 99); HARDWARE_PRESET's translation_device only applies to
+# the legacy MADLAD backend.
+LLAMA_CPP_RELEASE = "b11200"
+LLAMA_SERVER_DIR = "runtime/llama.cpp"
+LLAMA_SERVER_PORT = 8790  # local only; 8765 is the backend, 8766 replay_session.py
+# Output safety rail: at most this many output tokens per sentence (Sakura
+# averaged ~8 tokens per unit in the benchmark; a 70-char unit needs well
+# under 100), and generation stops early on a runaway repetition like
+# "啊啊啊啊…" (Sakura-1.5B produced 160 of them once in the benchmark).
+SAKURA_MAX_TOKENS_PER_CHAR = 2
+SAKURA_MAX_TOKENS_MIN = 32
+SAKURA_MAX_TOKENS_CAP = 320
+
 # MADLAD-400 3B (ctranslate2, int8) — chosen over NLLB 600M/1.3B after the
 # Stage 2B translation model benchmark (backend/benchmark/
 # translation_model_comparison.md) for clearly better long/transitional-
@@ -100,7 +146,8 @@ TRANSLATION_NO_REPEAT_NGRAM_SIZE = 3
 TRANSLATION_LENGTH_PENALTY = 0.5
 # Drop a clause of the Chinese output that just repeats an earlier one in
 # other words ("我太緊張了，我很緊張。" -> "我太緊張了。"); see
-# translator.drop_repeated_clauses. False turns it off.
+# translator.drop_repeated_clauses. False turns it off. Calibrated on and only
+# applied to MADLAD output (Sakura didn't pad or restate in the benchmark).
 TRANSLATION_DROP_REPEATED_CLAUSES = True
 OPENCC_CONFIG = "s2twp"  # Simplified -> Taiwan Traditional with phrase conversion
 

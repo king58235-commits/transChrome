@@ -20,12 +20,14 @@ def _register_nvidia_dll_dirs():
         return
     dirs = []
     for base in spec.submodule_search_locations:
-        for pkg in ("cublas", "cudnn", "cuda_nvrtc"):
+        for pkg in ("cublas", "cudnn", "cuda_nvrtc", "cuda_runtime"):
             bin_dir = os.path.join(base, pkg, "bin")
             if os.path.isdir(bin_dir):
                 dirs.append(bin_dir)
                 os.add_dll_directory(bin_dir)
     if dirs:
+        # The PATH change is also inherited by sakura.py's llama-server.exe,
+        # which loads cudart/cuBLAS from these same pip-installed wheels.
         os.environ["PATH"] = os.pathsep.join(dirs) + os.pathsep + os.environ.get("PATH", "")
 
 
@@ -36,8 +38,10 @@ import opencc
 import sentencepiece as spm
 
 import glossary
+import sakura
 from config import (
     OPENCC_CONFIG,
+    TRANSLATION_BACKEND,
     TRANSLATION_BEAM_SIZE,
     TRANSLATION_COMPUTE_TYPE_CPU,
     TRANSLATION_COMPUTE_TYPE_GPU,
@@ -51,8 +55,13 @@ from config import (
 
 logger = logging.getLogger("translator")
 
-_translator = None
-_sp = None
+# "sakura" or "madlad" (legacy), see config.TRANSLATION_BACKEND. A module
+# variable so a MADLAD-only benchmark can switch it before load_model().
+BACKEND = TRANSLATION_BACKEND
+
+_loaded = False
+_translator = None  # MADLAD only
+_sp = None  # MADLAD only
 _converter = None
 
 
@@ -141,24 +150,38 @@ def continues(japanese_text: str) -> bool:
 
 
 def load_model():
-    """Load the MADLAD translator + tokenizer + OpenCC converter, on the
+    """Load the configured backend plus the OpenCC converter. Sakura starts
+    its llama-server once here (sakura.start); MADLAD is loaded in-process by
+    _load_madlad. Safe to skip calling this (translate() then just returns ""
+    for every call) so a translation setup failure never prevents the
+    Japanese STT pipeline from running — see translate()'s docstring."""
+    global _loaded, _converter
+    _converter = opencc.OpenCC(OPENCC_CONFIG)
+    if BACKEND == "sakura":
+        sakura.start()
+    elif BACKEND == "madlad":
+        _load_madlad()
+    else:
+        raise ValueError(f"Unknown TRANSLATION_BACKEND {BACKEND!r} in config.py (valid: sakura, madlad)")
+    _loaded = True
+
+
+def _load_madlad():
+    """Legacy backend. Load the MADLAD translator + tokenizer + OpenCC converter, on the
     device fixed by config.TRANSLATION_DEVICE (set via HARDWARE_PRESET — see
     config.py). No automatic device fallback here: the preset is an explicit
     choice, so if the configured device can't actually be used (e.g.
     TRANSLATION_DEVICE="cuda" but the cuBLAS/cuDNN runtime is missing), that
     must be a loud startup failure, not a silent downgrade to a different
     device — same "no silent fallback" principle already applied to STT model
-    selection. Safe to skip calling this (translate() then just returns ""
-    for every call) so a translation setup failure never prevents the
-    Japanese STT pipeline from running — see translate()'s docstring."""
-    global _translator, _sp, _converter
+    selection."""
+    global _translator, _sp
     from huggingface_hub import snapshot_download
 
     logger.info("Loading translation model '%s' on %s", TRANSLATION_MODEL_REPO, TRANSLATION_DEVICE)
     model_dir = snapshot_download(TRANSLATION_MODEL_REPO)
     _sp = spm.SentencePieceProcessor()
     _sp.load(os.path.join(model_dir, "spiece.model"))
-    _converter = opencc.OpenCC(OPENCC_CONFIG)
 
     compute_type = (
         TRANSLATION_COMPUTE_TYPE_GPU if TRANSLATION_DEVICE == "cuda" else TRANSLATION_COMPUTE_TYPE_CPU
@@ -173,14 +196,14 @@ def load_model():
 
 def translate(japanese_text: str) -> TranslationResult:
     """Translate finalized Japanese text to Taiwan Traditional Chinese.
-    Returns TranslationResult(raw=<MADLAD Simplified output>, final=<after
+    Returns TranslationResult(raw=<model's Simplified output>, final=<after
     OpenCC>) — both kept for debug logging (see server.py). Never raises:
     returns TranslationResult("", "") if the model isn't loaded or
     translation fails, so a translation problem never breaks the Japanese STT
     pipeline that calls this. Only meant for finalized text, not partial
     previews — the caller (server.py) is responsible for only calling this on
     finals that also pass its quality gate."""
-    if _translator is None:
+    if not _loaded:
         logger.warning("translate() called before load_model() (or load_model failed); skipping")
         return TranslationResult("", "")
     if not japanese_text.strip():
@@ -193,9 +216,12 @@ def translate(japanese_text: str) -> TranslationResult:
         source_text = glossary.apply(japanese_text)
         if source_text != japanese_text:
             logger.info("[GLOSSARY] %s -> %s", japanese_text, source_text)
-        zh_hans = _run(_translator, _sp, source_text)
+        if BACKEND == "sakura":
+            zh_hans = sakura.generate(source_text)
+        else:
+            zh_hans = _run(_translator, _sp, source_text)
         zh_tw = glossary.fix_output(_converter.convert(zh_hans))
-        if TRANSLATION_DROP_REPEATED_CLAUSES:
+        if BACKEND == "madlad" and TRANSLATION_DROP_REPEATED_CLAUSES:
             deduped = drop_repeated_clauses(zh_tw)
             if deduped != zh_tw:
                 logger.info("[DEDUP] %s -> %s", zh_tw, deduped)

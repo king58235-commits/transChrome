@@ -19,6 +19,26 @@ function notifyBackground(message) {
 
 let audioChunkCount = 0;
 
+// Stall diagnostics (log only): tell the backend about gaps on this side so a
+// multi-second stall can be placed. capture_gap = no audio chunk from the
+// worklet for over 1s; audio_clock_ms says whether the audio clock kept
+// running meanwhile (≈ gap_ms: audio flowed but this page didn't get the
+// chunks, e.g. a blocked page; ≈ 0: the capture/audio device itself stalled).
+// send_backlog = audio piling up unsent in the WebSocket (network/backend not
+// taking it). The backend logs these as [CLIENT DIAG].
+const CAPTURE_GAP_MS = 1000;
+const SEND_BACKLOG_BYTES = 64000; // ~2s of 16kHz PCM16
+let lastChunkAt = null;
+let lastChunkAudioTime = null;
+let sendBacklogReported = false;
+
+function sendDiag(info) {
+  console.warn("[offscreen] diag", info);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "diag", ...info }));
+  }
+}
+
 function connectWebSocket() {
   console.log("[offscreen] WebSocket connecting to", BACKEND_URL);
   ws = new WebSocket(BACKEND_URL);
@@ -60,6 +80,7 @@ function connectWebSocket() {
         type: "ZH_FINAL",
         segmentId: data.unit_id,
         sourceText: data.source_text,
+        sourceSegments: data.source_segments,
         text: data.text,
       });
     }
@@ -117,7 +138,28 @@ async function startCapture(streamId) {
   sourceNode.connect(workletNode);
   workletNode.connect(silentGain).connect(audioContext.destination);
 
+  lastChunkAt = null;
+  lastChunkAudioTime = null;
+  sendBacklogReported = false;
+
   workletNode.port.onmessage = (event) => {
+    const now = performance.now();
+    if (lastChunkAt !== null && now - lastChunkAt > CAPTURE_GAP_MS) {
+      sendDiag({
+        event: "capture_gap",
+        gap_ms: Math.round(now - lastChunkAt),
+        audio_clock_ms: Math.round((audioContext.currentTime - lastChunkAudioTime) * 1000),
+        ws_buffered: ws ? ws.bufferedAmount : null,
+      });
+    }
+    lastChunkAt = now;
+    lastChunkAudioTime = audioContext.currentTime;
+    if (ws && ws.bufferedAmount > SEND_BACKLOG_BYTES && !sendBacklogReported) {
+      sendBacklogReported = true;
+      sendDiag({ event: "send_backlog", ws_buffered: ws.bufferedAmount });
+    } else if (ws && ws.bufferedAmount < SEND_BACKLOG_BYTES / 4) {
+      sendBacklogReported = false;
+    }
     audioChunkCount += 1;
     if (audioChunkCount % 20 === 1) {
       console.log("[offscreen] audio chunk", audioChunkCount, "wsState", ws && ws.readyState);

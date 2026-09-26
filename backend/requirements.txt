@@ -14,8 +14,12 @@ huggingface_hub>=0.21
 # for either model (both "balanced" and "high" use it for STT at minimum).
 nvidia-cublas-cu12
 nvidia-cudnn-cu12
+# CUDA runtime (cudart64_12.dll) for the llama.cpp server behind the Sakura
+# translation backend (sakura.py); cuBLAS above serves it too. The llama.cpp
+# binaries themselves come from setup_llama.py, not pip.
+nvidia-cuda-runtime-cu12==12.4.127
 
-# Japanese -> Traditional Chinese translation (translator.py): MADLAD-400 3B,
-# tokenized via raw sentencepiece (no torch/transformers needed).
+# OpenCC: Sakura/MADLAD Simplified output -> Taiwan Traditional.
+# sentencepiece: only for the legacy MADLAD backend (TRANSLATION_BACKEND="madlad").
 sentencepiece>=0.1.99
 opencc>=1.1.6

@@ -15,4 +15,7 @@ backend/recordings/
 
 # Backend console logs written by LOG_TO_FILE (contain live transcripts)
 backend/logs/
+
+# llama.cpp runtime installed by setup_llama.py (third-party binaries)
+backend/runtime/
 backend/benchmark/stt_compare*.txt

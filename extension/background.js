@@ -180,6 +180,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       type: "ZH_FINAL",
       segmentId: message.segmentId,
       sourceText: message.sourceText,
+      sourceSegments: message.sourceSegments,
       text: message.text,
     });
   }

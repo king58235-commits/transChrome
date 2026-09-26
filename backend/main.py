@@ -50,7 +50,10 @@ if __name__ == "__main__":
         logger.info("Logging to %s", log_path)
     logger.info("Hardware preset: %s", config.HARDWARE_PRESET)
     logger.info("STT: Kotoba / %s", config.STT_DEVICE.upper())
-    logger.info("Translation: MADLAD / %s", config.TRANSLATION_DEVICE.upper())
+    if config.TRANSLATION_BACKEND == "sakura":
+        logger.info("Translation: Sakura-7B / CUDA (llama.cpp %s)", config.LLAMA_CPP_RELEASE)
+    else:
+        logger.info("Translation: MADLAD (legacy) / %s", config.TRANSLATION_DEVICE.upper())
     log_gpu_state("startup (before any model load)")
 
     transcriber.load_model()

@@ -43,7 +43,8 @@
   z-index: 2147483647;
 }
 
-/* Japanese: secondary line, continuously updating (partial while speaking). */
+/* Live Japanese line at the bottom: what is being said right now (partial,
+   then final until its translation takes it into the stack above). */
 #yt-jp-subtitle-overlay-ja {
   color: rgba(255, 255, 255, 0.75);
   font-size: 15px;
@@ -52,12 +53,59 @@
   white-space: pre-wrap;
 }
 
-/* Traditional Chinese: primary reading line, only updates on a finished translation. */
+/* Stack of up to 3 finished translations, newest at the bottom (content.js
+   addZhLine). Each entry: its Japanese source (small) above the Chinese. Same
+   font sizes for all entries, only opacity tells them apart. */
 #yt-jp-subtitle-overlay-zh {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.zh-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 4px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+
+.zh-src {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: center;
+  white-space: pre-wrap;
+}
+
+.zh-line {
   color: #fff;
   font-size: 22px;
   font-weight: 600;
   line-height: 1.4;
   text-align: center;
   white-space: pre-wrap;
+}
+
+/* Just added: starts slightly lower and transparent, then slides into place. */
+.zh-entry.zh-entering {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.zh-entry.zh-second {
+  opacity: 0.85;
+}
+
+/* Oldest line or expired second line: fades out, then content.js removes it
+   (ZH_FADE_MS there = the 1.2s here). */
+.zh-entry.zh-fading {
+  animation: zh-fade-out 1.2s ease-in forwards;
+}
+
+@keyframes zh-fade-out {
+  from { opacity: 0.5; }
+  to { opacity: 0; }
 }

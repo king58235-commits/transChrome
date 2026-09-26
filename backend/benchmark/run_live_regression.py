@@ -100,6 +100,7 @@ def main():
     if unknown:
         sys.exit(f"Unknown config(s): {unknown}. Known: {list(CONFIGS)}")
 
+    translator.BACKEND = "madlad"  # this regression set tracks MADLAD's decoding settings
     translator.load_model()
     tr, sp, conv = translator._translator, translator._sp, translator._converter
 

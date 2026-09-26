@@ -25,7 +25,7 @@ if defined EXISTING_PID (
 rem Window title shows in the taskbar, so a forgotten backend is easy to spot.
 title transChrome Backend - RUNNING (port 8765)
 echo Starting backend on ws://127.0.0.1:8765 ...
-echo (First run downloads Kotoba-whisper (~1.5GB) and MADLAD (~3GB) from Hugging Face.)
+echo (First run downloads Kotoba-whisper (~1.5GB) and Sakura-7B (~4.3GB) from Hugging Face.)
 echo Keep this window open while using the extension. Press Ctrl+C to stop.
 echo.
 venv\Scripts\python.exe main.py
