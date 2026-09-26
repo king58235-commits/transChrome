@@ -107,6 +107,9 @@ if (!window.__ytJpSubtitleContentLoaded) {
       setJaLine(message.text);
       console.log(`[content] JA final #${message.segmentId}:`, message.text);
     } else if (message.type === "ZH_FINAL") {
+      // The backend restarts unit numbering at 0 for every new session; never
+      // let a previous session's higher number hide the new session's lines.
+      if (message.segmentId === 0) lastDisplayedZhSegmentId = -1;
       if (message.segmentId != null && message.segmentId < lastDisplayedZhSegmentId) {
         console.warn(
           `[content] ignoring out-of-order ZH_FINAL #${message.segmentId} (already showing #${lastDisplayedZhSegmentId})`

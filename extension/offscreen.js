@@ -53,10 +53,12 @@ function connectWebSocket() {
       console.log(`[offscreen] final #${data.segment_id}:`, data.text);
       notifyBackground({ type: "JA_FINAL", segmentId: data.segment_id, text: data.text });
     } else if (data.type === "translation") {
-      console.log(`[offscreen] translation #${data.segment_id}:`, data.text);
+      // Translations are numbered per translation unit (unit_id), not per STT
+      // segment — one unit can merge several segments (see server.py).
+      console.log(`[offscreen] translation #${data.unit_id}:`, data.text);
       notifyBackground({
         type: "ZH_FINAL",
-        segmentId: data.segment_id,
+        segmentId: data.unit_id,
         sourceText: data.source_text,
         text: data.text,
       });
