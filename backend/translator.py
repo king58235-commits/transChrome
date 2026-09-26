@@ -34,12 +34,14 @@ import ctranslate2
 import opencc
 import sentencepiece as spm
 
+import glossary
 from config import (
     OPENCC_CONFIG,
     TRANSLATION_BEAM_SIZE,
     TRANSLATION_COMPUTE_TYPE_CPU,
     TRANSLATION_COMPUTE_TYPE_GPU,
     TRANSLATION_DEVICE,
+    TRANSLATION_LENGTH_PENALTY,
     TRANSLATION_MODEL_REPO,
     TRANSLATION_NO_REPEAT_NGRAM_SIZE,
     TRANSLATION_TGT_TOKEN,
@@ -58,6 +60,7 @@ def _run(translator, sp, text: str) -> str:
         [source],
         beam_size=TRANSLATION_BEAM_SIZE,
         no_repeat_ngram_size=TRANSLATION_NO_REPEAT_NGRAM_SIZE,
+        length_penalty=TRANSLATION_LENGTH_PENALTY,
     )
     return sp.decode(results[0].hypotheses[0])
 
@@ -107,8 +110,15 @@ def translate(japanese_text: str) -> TranslationResult:
         return TranslationResult("", "")
     if not japanese_text.strip():
         return TranslationResult("", "")
+    fixed = glossary.filler(japanese_text)
+    if fixed is not None:
+        logger.info("[FILLER] %s -> %s", japanese_text, fixed)
+        return TranslationResult(fixed, fixed)
     try:
-        zh_hans = _run(_translator, _sp, japanese_text)
+        source_text = glossary.apply(japanese_text)
+        if source_text != japanese_text:
+            logger.info("[GLOSSARY] %s -> %s", japanese_text, source_text)
+        zh_hans = _run(_translator, _sp, source_text)
         zh_tw = _converter.convert(zh_hans)
         return TranslationResult(zh_hans, zh_tw)
     except Exception:

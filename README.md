@@ -46,6 +46,8 @@ Translation: MADLAD / CPU
 | `STT_MODEL` | `kotoba` | 對應 `STT_MODEL_PRESETS["kotoba"]` = `kotoba-tech/kotoba-whisper-v2.0-faster`。可切換 `small`/`medium`/`kotoba`，比較結果見 `backend/benchmark/result_*.json` |
 | `TRANSLATION_MODEL_REPO` | `Heng666/madlad400-3b-mt-ct2-int8` | MADLAD-400 3B，選型依據見 `backend/benchmark/translation_model_comparison.md` |
 | `TRANSLATION_NO_REPEAT_NGRAM_SIZE` | 3 | 修掉 MADLAD 短句重複迴圈問題的 decoding 參數，校準依據見 `backend/benchmark/madlad_decoding_sweep.md` |
+| `SAVE_SESSION_AUDIO` | False | 設成 `True` 時，每次「開始字幕」會把收到的音訊另存成 `backend/recordings/session_*.wav`（約 115MB／小時，不進 Git），供之後離線重跑 STT／翻譯合併測試；不影響字幕 |
+| `TRANSLATION_LENGTH_PENALTY` | 0.5 | 讓 beam search 偏好較短的完整譯文，減少短句「自己加戲／同義重複」，校準依據同上（live-session 段落） |
 | `SILENCE_TRIGGER_MS` | 300ms | STT 斷句用的語音停頓門檻（日文字幕反應速度） |
 | `TRANSLATION_BOUNDARY_SILENCE_MS` | 800ms | 判斷是否合併相鄰 STT final 成一個翻譯單位的真實語音停頓門檻 |
 | `TRANSLATION_IDLE_FLUSH_S` | 1.2s | 保底：等不到下一個 STT final 時，最多等這麼久就把目前累積的內容送去翻譯（經 4 組 sweep 校準） |
@@ -72,6 +74,7 @@ Translation: MADLAD / CPU
 | `audio_buffer.py` | 累積收到的 PCM16 音訊 |
 | `transcriber.py` | faster-whisper 封裝：模型載入（含 CUDA 能力偵測與 CPU fallback）、GPU DLL 路徑註冊、VAD 停頓偵測與真實語音時間擷取、partial/final 兩種辨識設定 |
 | `translator.py` | 獨立翻譯模組（刻意不 import transcriber.py，與 STT 解耦）：MADLAD 模型載入（裝置依 `HARDWARE_PRESET` 決定，不再自動 CUDA→CPU fallback，因為裝置已是明確選擇）、日文→簡中翻譯、OpenCC 轉台灣繁中，翻譯失敗永遠回傳空字串、不拋例外 |
+| `glossary.py` | 翻譯前的人名／用語字典：把 hololive 成員名與常用直播用語換成固定的中文（或英文）寫法，避免 MADLAD 亂音譯（例如 フブちゃん → 胡佛）。可自行增修，新增名字前先確認 MADLAD 不會把它當一般詞翻譯（說明見檔案開頭） |
 | `config.py` | 所有可調參數（STT 模型選擇、VAD 閾值、翻譯合併門檻等，見上方「目前正式參數」） |
 | `test_client.py` | 不需要 Chrome，直接送合成音訊測試 backend 的除錯工具 |
 | `benchmark/` | 模型/硬體比較工具與長期參考資料：`recorder.py`（錄固定測試音訊）、`run_model.py`/`run_translation_model.py`/`run_madlad_decoding_sweep.py`（STT/翻譯模型與 decoding 參數跑分）、`test_*.py`（硬體相容性測試）、`translation_dataset.py`（固定 70 句翻譯測試集）、三份 `.md` 比較報告。原始逐句 JSON 輸出跟測試音訊本身（`.wav`，內含真實直播內容，有版權疑慮）不進 Git，只保留腳本、資料集跟摘要報告 |

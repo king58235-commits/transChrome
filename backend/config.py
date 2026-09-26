@@ -61,6 +61,14 @@ PARTIAL_INTERVAL_SECONDS = 0.75  # how often to refresh the partial preview
 # rather than blocking all future transcription for the rest of the session.
 TRANSCRIBE_TIMEOUT_SECONDS = 12
 
+# Debug/benchmark aid: also save each subtitle session's received audio
+# (exactly what STT saw, 16kHz mono PCM16) as a WAV in SESSION_AUDIO_DIR
+# (relative to backend/), so a live session can be replayed offline for STT /
+# Translation Buffer tuning. About 115MB per hour. It is the stream's audio,
+# so it stays local (git-ignored). Doesn't affect subtitles either way.
+SAVE_SESSION_AUDIO = False
+SESSION_AUDIO_DIR = "recordings"
+
 # Japanese -> Traditional Chinese translation of finalized text only.
 # MADLAD-400 3B (ctranslate2, int8) — chosen over NLLB 600M/1.3B after the
 # Stage 2B translation model benchmark (backend/benchmark/
@@ -77,6 +85,12 @@ TRANSLATION_COMPUTE_TYPE_GPU = "int8_float16"
 TRANSLATION_COMPUTE_TYPE_CPU = "int8"
 TRANSLATION_BEAM_SIZE = 4
 TRANSLATION_NO_REPEAT_NGRAM_SIZE = 3
+# Below ctranslate2's default 1.0 = beam search leans toward shorter finished
+# hypotheses. Cuts MADLAD's padding/duplication on short live utterances
+# ("懐かしいね" -> "很想念, 很難忘, 太想念了") without touching CASE1/4/5;
+# 0.0 over-shortened. Calibrated in benchmark/madlad_decoding_sweep.md
+# (live-session section).
+TRANSLATION_LENGTH_PENALTY = 0.5
 OPENCC_CONFIG = "s2twp"  # Simplified -> Taiwan Traditional with phrase conversion
 
 # Translation Sentence Buffer (server.py) v2: merges consecutive STT final

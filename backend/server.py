@@ -1,8 +1,10 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import time
+import wave
 
 import websockets
 
@@ -10,12 +12,17 @@ import transcriber
 import translator
 from audio_buffer import BYTES_PER_SECOND, AudioBuffer
 from config import (
+    CHANNELS,
     HOST,
     MAX_CHUNK_SECONDS,
     MIN_CHUNK_SECONDS,
     PARTIAL_INTERVAL_SECONDS,
     PARTIAL_MIN_SECONDS,
     PORT,
+    SAMPLE_RATE,
+    SAMPLE_WIDTH_BYTES,
+    SAVE_SESSION_AUDIO,
+    SESSION_AUDIO_DIR,
     TRANSCRIBE_TIMEOUT_SECONDS,
     TRANSLATION_BOUNDARY_SILENCE_MS,
     TRANSLATION_IDLE_FLUSH_S,
@@ -49,10 +56,24 @@ def should_translate(text: str) -> tuple[bool, str]:
     return True, ""
 
 
+def open_session_recording():
+    """WAV writer for this session's received audio (SAVE_SESSION_AUDIO)."""
+    audio_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), SESSION_AUDIO_DIR)
+    os.makedirs(audio_dir, exist_ok=True)
+    path = os.path.join(audio_dir, time.strftime("session_%Y%m%d_%H%M%S.wav"))
+    wav = wave.open(path, "wb")
+    wav.setnchannels(CHANNELS)
+    wav.setsampwidth(SAMPLE_WIDTH_BYTES)
+    wav.setframerate(SAMPLE_RATE)
+    logger.info("Recording session audio to %s", path)
+    return wav
+
+
 async def handler(websocket):
     logger.info("WebSocket connected: %s", websocket.remote_address)
     buffer = AudioBuffer()
     loop = asyncio.get_running_loop()
+    recording = None  # wave writer while SAVE_SESSION_AUDIO is on
 
     busy = False
     last_partial_text = ""
@@ -267,6 +288,8 @@ async def handler(websocket):
         async for message in websocket:
             if isinstance(message, bytes):
                 buffer.append(message)
+                if recording is not None:
+                    recording.writeframes(message)
                 audio_position_s += len(message) / BYTES_PER_SECOND
                 logger.info(
                     "Audio received: %d bytes (buffer duration: %.2fs)",
@@ -292,12 +315,18 @@ async def handler(websocket):
                     audio_position_s = 0.0
                     segment_start_audio_pos = 0.0
                     session_start_wallclock = time.monotonic()
+                    if recording is not None:
+                        recording.close()
+                    recording = open_session_recording() if SAVE_SESSION_AUDIO else None
                 elif msg_type == "stop":
                     logger.info(
                         "Subtitle session stopped (total buffered: %.2fs)",
                         buffer.duration_seconds(),
                     )
                     buffer.clear()
+                    if recording is not None:
+                        recording.close()
+                        recording = None
                 else:
                     logger.warning("Unknown control message: %s", control)
     except websockets.ConnectionClosed as exc:
@@ -307,6 +336,8 @@ async def handler(websocket):
     finally:
         translation_worker_task.cancel()
         sentence_buffer_task.cancel()
+        if recording is not None:
+            recording.close()
 
 
 async def start_server():
