@@ -15,3 +15,4 @@ backend/recordings/
 
 # Backend console logs written by LOG_TO_FILE (contain live transcripts)
 backend/logs/
+backend/benchmark/stt_compare*.txt

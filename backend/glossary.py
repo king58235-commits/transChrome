@@ -207,10 +207,21 @@ def _build():
 _ZH_BY_FORM, _NEEDS_HONORIFIC, _NAME_RE, _TERM_RE = _build()
 
 
+# A katakana-only name inside a longer katakana word is part of that word, not
+# the name (ルーナ in ルーナイト, the fan name).
+_KATAKANA_FORM_RE = re.compile(r"[ァ-ヶー・]+")
+_KATAKANA_CHAR_RE = re.compile(r"[ァ-ヶー]")
+
+
 def _replace_name(m):
     form, hon = m.group(1), m.group(2)
     if hon is None and form in _NEEDS_HONORIFIC:
         return m.group(0)
+    if _KATAKANA_FORM_RE.fullmatch(form):
+        before = m.string[m.start() - 1:m.start()]
+        after = "" if hon else m.string[m.end(1):m.end(1) + 1]
+        if _KATAKANA_CHAR_RE.fullmatch(before or " ") or _KATAKANA_CHAR_RE.fullmatch(after or " "):
+            return m.group(0)
     return _ZH_BY_FORM[form] + (HONORIFICS[hon] if hon else "")
 
 
