@@ -57,9 +57,17 @@ _model_path = None
 _api_key = secrets.token_hex(16)
 
 
-def _prompt(japanese_text):
+def _prompt(japanese_text, names=()):
+    # With names: Sakura v1.0's official glossary form ("source->target #note"
+    # lines), target in Simplified like the rest of its output.
+    if names:
+        glossary_lines = "\n".join(f"{src}->{dst} #人名" for src, dst in names)
+        user = (f"根据以下术语表（可以为空）：\n{glossary_lines}\n"
+                f"将下面的日文文本根据对应关系和备注翻译成中文：{japanese_text}")
+    else:
+        user = f"将下面的日文文本翻译成中文：{japanese_text}"
     return (f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n"
-            f"<|im_start|>user\n将下面的日文文本翻译成中文：{japanese_text}<|im_end|>\n"
+            f"<|im_start|>user\n{user}<|im_end|>\n"
             f"<|im_start|>assistant\n")
 
 
@@ -166,10 +174,11 @@ def start():
     logger.info("Sakura-7B ready on CUDA via llama-server (PID %d, %.1fs)", _proc.pid, time.monotonic() - started)
 
 
-def generate(japanese_text):
-    """Translate one unit; returns the model's Simplified Chinese text."""
+def generate(japanese_text, names=()):
+    """Translate one unit; returns the model's Simplified Chinese text.
+    names: (Japanese, Simplified Chinese) member-name glossary entries."""
     max_tokens = min(SAKURA_MAX_TOKENS_CAP, max(SAKURA_MAX_TOKENS_MIN, SAKURA_MAX_TOKENS_PER_CHAR * len(japanese_text)))
-    body = {"prompt": _prompt(japanese_text), "n_predict": max_tokens, "temperature": 0,
+    body = {"prompt": _prompt(japanese_text, names), "n_predict": max_tokens, "temperature": 0,
             "stream": True, "stop": ["<|im_end|>"], "cache_prompt": True}
     conn = http.client.HTTPConnection("127.0.0.1", LLAMA_SERVER_PORT, timeout=REQUEST_TIMEOUT_S)
     started = time.monotonic()

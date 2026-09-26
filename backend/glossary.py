@@ -271,11 +271,32 @@ def fix_output(text: str) -> str:
     return text
 
 
-def apply(text: str) -> str:
+def apply(text: str, replace_names: bool = True) -> str:
+    """Pre-process Japanese text for the translator. replace_names=False
+    keeps member names as spoken, for Sakura, which gets them as glossary
+    entries instead (name_entries), see translator.translate."""
     text = fix_stt(text)
-    text = _NAME_RE.sub(_replace_name, text)
+    if replace_names:
+        text = _NAME_RE.sub(_replace_name, text)
     text = _GENERATION_RE.sub(lambda m: m.group(1) + "期成員", text)
     return _TERM_RE.sub(lambda m: TERMS[m.group(0)], text)
+
+
+def name_entries(text: str):
+    """(name as written in text, display name) for each member name found,
+    by the same matching rules as apply. For Sakura's glossary prompt: fed the
+    Chinese name inside the Japanese text, Sakura translated it as a word
+    (白上フブキ -> "暴風雪", 角卷 -> "捲成一團"); given as a glossary entry
+    with the Japanese left as spoken, 240 of 259 test sentences came out with
+    the right name vs 203 (benchmark/test_sakura_names.py). Display names go
+    through OUTPUT_FIXES, so わため is listed as 綿芽 directly."""
+    entries = []
+    for m in _NAME_RE.finditer(fix_stt(text)):
+        if _replace_name(m) != m.group(0):
+            entry = (m.group(0), fix_output(_ZH_BY_FORM[m.group(1)]))
+            if entry not in entries:
+                entries.append(entry)
+    return entries
 
 
 # Whole utterances that get a fixed translation instead of going to MADLAD.

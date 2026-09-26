@@ -85,7 +85,7 @@ Translation: Sakura-7B / CUDA (llama.cpp b11200)
 | `translator.py` | 獨立翻譯模組（刻意不 import transcriber.py，與 STT 解耦）：依 `TRANSLATION_BACKEND` 呼叫 Sakura 或 legacy MADLAD、字典前後處理、OpenCC 轉台灣繁中，翻譯失敗永遠回傳空字串、不拋例外 |
 | `sakura.py` | Sakura-7B 後端：backend 啟動時開一個 llama-server 程序並常駐 GPU（每句不重新載入），透過本機 HTTP 翻譯；每次啟動產生隨機 API 金鑰；用 Windows job object 綁定 backend，backend 結束（含關視窗、當掉）時 llama-server 一定跟著結束 |
 | `setup_llama.py` | 下載並安裝 llama.cpp runtime 到 `backend/runtime/llama.cpp`（setup.bat 會自動執行，已安裝就略過） |
-| `glossary.py` | 翻譯前處理：整句只有語助詞或常用短句（ありがとうございます、懐かしい…）時直接給固定譯文；其餘句子再做人名／用語字典替換：把 hololive 成員名與常用直播用語換成固定的中文（或英文）寫法，避免 MADLAD 亂音譯（例如 フブちゃん → 胡佛）。可自行增修，新增名字前先確認 MADLAD 不會把它當一般詞翻譯（說明見檔案開頭）。`STT_FIXES` 放反覆出現的固定聽錯（例如 また目／渡辺 → わため），只收在實際 log 中重複出現、且錯誤寫法在該位置不是一般用詞的項目 |
+| `glossary.py` | 翻譯前處理：整句只有語助詞或常用短句（ありがとうございます、懐かしい…）時直接給固定譯文；其餘句子再做用語字典替換（直播用語換成固定中文）。**人名**：Sakura 模式下日文原文保留名字，改用 Sakura 官方「術語表」prompt 傳入這句出現的成員名（例如 `フブちゃん->吹雪 #人名`）；直接把中文名塞進日文會被 Sakura 當成一般詞翻（白上フブキ →「暴風雪」），259 句人名測試（`benchmark/test_sakura_names.py`）中術語表 240 句正確、舊做法 203 句。MADLAD 模式仍是直接替換。可自行增修，新增名字前先確認 MADLAD 不會把它當一般詞翻譯（說明見檔案開頭）。`STT_FIXES` 放反覆出現的固定聽錯（例如 また目／渡辺 → わため），只收在實際 log 中重複出現、且錯誤寫法在該位置不是一般用詞的項目 |
 | `config.py` | 所有可調參數（STT 模型選擇、VAD 閾值、翻譯合併門檻等，見上方「目前正式參數」） |
 | `test_client.py` | 不需要 Chrome 的測試工具：不帶參數送 4 秒靜音；帶錄音檔（`test_client.py <wav> [秒數]`）會即時串流並印出日文 final 與中文翻譯 |
 | `benchmark/` | 模型/硬體比較工具與長期參考資料：`recorder.py`（錄固定測試音訊）、`run_model.py`/`run_translation_model.py`/`run_madlad_decoding_sweep.py`（STT/翻譯模型與 decoding 參數跑分）、`test_*.py`（硬體相容性測試）、`translation_dataset.py`（固定 70 句翻譯測試集）、三份 `.md` 比較報告。原始逐句 JSON 輸出跟測試音訊本身（`.wav`，內含真實直播內容，有版權疑慮）不進 Git，只保留腳本、資料集跟摘要報告 |

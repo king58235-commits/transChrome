@@ -63,6 +63,7 @@ _loaded = False
 _translator = None  # MADLAD only
 _sp = None  # MADLAD only
 _converter = None
+_to_simplified = None  # glossary entries for Sakura, which writes Simplified
 
 
 def _run(translator, sp, text: str) -> str:
@@ -155,8 +156,9 @@ def load_model():
     _load_madlad. Safe to skip calling this (translate() then just returns ""
     for every call) so a translation setup failure never prevents the
     Japanese STT pipeline from running — see translate()'s docstring."""
-    global _loaded, _converter
+    global _loaded, _converter, _to_simplified
     _converter = opencc.OpenCC(OPENCC_CONFIG)
+    _to_simplified = opencc.OpenCC("t2s")
     if BACKEND == "sakura":
         sakura.start()
     elif BACKEND == "madlad":
@@ -213,11 +215,18 @@ def translate(japanese_text: str) -> TranslationResult:
         logger.info("[FIXED] %s -> %s", japanese_text, fixed)
         return TranslationResult(fixed, fixed)
     try:
-        source_text = glossary.apply(japanese_text)
+        if BACKEND == "sakura":
+            # Member names stay as spoken and go in as glossary entries.
+            source_text = glossary.apply(japanese_text, replace_names=False)
+            names = [(src, _to_simplified.convert(dst)) for src, dst in glossary.name_entries(japanese_text)]
+        else:
+            source_text, names = glossary.apply(japanese_text), []
         if source_text != japanese_text:
             logger.info("[GLOSSARY] %s -> %s", japanese_text, source_text)
+        if names:
+            logger.info("[NAMES] %s", ", ".join(f"{src}->{dst}" for src, dst in names))
         if BACKEND == "sakura":
-            zh_hans = sakura.generate(source_text)
+            zh_hans = sakura.generate(source_text, names)
         else:
             zh_hans = _run(_translator, _sp, source_text)
         zh_tw = glossary.fix_output(_converter.convert(zh_hans))
