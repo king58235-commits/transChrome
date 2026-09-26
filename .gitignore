@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+
+# Benchmark outputs: raw per-sentence JSON and test audio (real livestream
+# content, copyright concerns) stay local — only scripts, the dataset script
+# and the .md summary reports are tracked (see README).
+backend/benchmark/*.wav
+backend/benchmark/*.json
