@@ -61,7 +61,7 @@ def _prompt(japanese_text, names=()):
     # With names: Sakura v1.0's official glossary form ("source->target #note"
     # lines), target in Simplified like the rest of its output.
     if names:
-        glossary_lines = "\n".join(f"{src}->{dst} #人名" for src, dst in names)
+        glossary_lines = "\n".join(f"{src}->{dst} #{note}" for src, dst, note in names)
         user = (f"根据以下术语表（可以为空）：\n{glossary_lines}\n"
                 f"将下面的日文文本根据对应关系和备注翻译成中文：{japanese_text}")
     else:
@@ -176,7 +176,7 @@ def start():
 
 def generate(japanese_text, names=()):
     """Translate one unit; returns the model's Simplified Chinese text.
-    names: (Japanese, Simplified Chinese) member-name glossary entries."""
+    names: (Japanese, target, note) glossary entries (members, fan names)."""
     max_tokens = min(SAKURA_MAX_TOKENS_CAP, max(SAKURA_MAX_TOKENS_MIN, SAKURA_MAX_TOKENS_PER_CHAR * len(japanese_text)))
     body = {"prompt": _prompt(japanese_text, names), "n_predict": max_tokens, "temperature": 0,
             "stream": True, "stop": ["<|im_end|>"], "cache_prompt": True}

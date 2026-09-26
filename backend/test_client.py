@@ -11,6 +11,7 @@ import asyncio
 import json
 import struct
 import sys
+import time
 import wave
 
 import websockets
@@ -54,9 +55,13 @@ async def main():
 
         receiver = asyncio.create_task(receive())
         await ws.send(json.dumps({"type": "start"}))
-        for chunk in audio_chunks(wav_path, max_seconds):
+        started = time.monotonic()
+        for i, chunk in enumerate(audio_chunks(wav_path, max_seconds)):
+            # Pace against the start time, not a fixed sleep per chunk: the
+            # send time would otherwise add up and the audio would drift
+            # behind real time (latency logs then grow by seconds per minute).
+            await asyncio.sleep(max(0.0, started + (i + 1) * CHUNK_MS / 1000 - time.monotonic()))
             await ws.send(chunk)
-            await asyncio.sleep(CHUNK_MS / 1000)
         await asyncio.sleep(TAIL_SECONDS if wav_path else 0)
         await ws.send(json.dumps({"type": "stop"}))
         receiver.cancel()

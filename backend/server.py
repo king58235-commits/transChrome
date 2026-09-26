@@ -311,6 +311,13 @@ async def handler(websocket):
                         logger.info("[STT HALLUCINATION] dropped %r (%.2fs of speech)", text,
                                     0.0 if start_off is None else end_off - start_off)
                         text = None
+                    elif start_off is None:
+                        # Kept text with no VAD speech (VAD fallback): the
+                        # speech is somewhere in this chunk, so use the chunk
+                        # itself as its span. Otherwise the sentence buffer
+                        # timed it at 0s, logging a latency from the start of
+                        # the session (73s) and breaking the join gap check.
+                        start_off, end_off = 0.0, len(pcm_bytes) / BYTES_PER_SECOND
                 if text:
                     segment_id = next_segment_id
                     next_segment_id += 1

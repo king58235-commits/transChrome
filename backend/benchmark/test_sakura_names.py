@@ -41,7 +41,7 @@ def main():
     runs = {
         "A replace in text": lambda ja: sakura.generate(glossary.apply(ja)),
         "B glossary entries": lambda ja: sakura.generate(glossary.apply(ja, replace_names=False), [
-            (src, translator._to_simplified.convert(dst)) for src, dst in glossary.name_entries(ja)]),
+            (src, translator._to_simplified.convert(dst), note) for src, dst, note in glossary.name_entries(ja)]),
         "C no glossary": lambda ja: sakura.generate(ja),
     }
     cases = sentences()
@@ -49,7 +49,7 @@ def main():
         misses = []
         for ja in cases:
             out = glossary.fix_output(to_tw.convert(run(ja)))
-            want = [dst for _, dst in glossary.name_entries(ja)]
+            want = [dst for _, dst, _note in glossary.name_entries(ja)]
             if not all(w in out for w in want):
                 misses.append(f"   {ja} => {out}  (want {want})")
         print(f"{label}: {len(cases) - len(misses)}/{len(cases)}")

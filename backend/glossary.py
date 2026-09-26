@@ -35,11 +35,11 @@ MEMBERS = [
     # ---- JP 0th gen ----
     (["ときのそら", "そら~", "ソラ~"], "時乃空"),
     (["ロボ子"], "蘿蔔子"),
-    (["さくらみこ", "みこち", "ミコち", "みこ~", "ミコ~"], "櫻巫女"),
+    (["さくらみこ", "みこち", "ミコち", "みこ~", "ミコ~"], "Miko"),
     (["星街すいせい", "すいせい~", "スイセイ~", "すいちゃん", "スイちゃん"], "星街彗星"),
     (["AZKi", "あずき~"], "AZKi"),
     # ---- JP 1st gen ----
-    (["夜空メル", "メル~"], "夜空梅露"),
+    (["夜空メル", "メル~"], "梅露"),
     (["アキ・ローゼンタール", "アキロゼ", "アキ~"], "亞綺"),
     (["はあちゃま"], "哈洽馬"),
     (["赤井はあと", "はあと~", "ハート~"], "赤井心"),
@@ -47,43 +47,43 @@ MEMBERS = [
     (["夏色まつり", "まつり~", "マツリ~"], "夏色祭"),
     # ---- JP 2nd gen ----
     (["湊あくあ", "あくたん", "あくあ", "アクア~"], "阿庫婭"),
-    (["紫咲シオン", "シオン"], "紫咲詩音"),
-    (["百鬼あやめ", "あやめ~", "アヤメ~"], "百鬼"),
+    (["紫咲シオン", "シオン"], "詩音"),
+    (["百鬼あやめ", "あやめ~", "アヤメ~"], "綾目"),
     (["お嬢"], "大小姐"),
     (["癒月ちょこ", "ちょこ~", "チョコ~"], "巧可"),
     (["大空スバル", "スバル"], "大空昴"),
     # ---- JP GAMERS ----
-    (["大神ミオ", "ミオしゃ", "ミオシャ", "ミオ"], "大神澪"),
-    (["猫又おかゆ", "おかゆん", "おかゆ~", "オカユ~"], "貓又小粥"),
-    (["戌神ころね", "ころさん", "ころね", "コロさん", "コロネ~"], "戌神沁音"),
+    (["大神ミオ", "ミオしゃ", "ミオシャ", "ミオ"], "澪"),
+    (["猫又おかゆ", "おかゆん", "おかゆ~", "オカユ~"], "小粥"),
+    (["戌神ころね", "ころさん", "ころね", "コロさん", "コロネ~"], "沁音"),
     # ---- JP 3rd gen ----
     (["兎田ぺこら", "ぺこーら", "ぺこら", "ぺこちゃん", "ペコーラ", "ペコラ", "ペコちゃん"], "佩克拉"),
-    (["不知火フレア", "フレア~", "フーたん"], "不知火芙蕾雅"),
+    (["不知火フレア", "フレア~", "フーたん"], "芙蕾雅"),
     (["白銀ノエル", "ノエル"], "白銀諾艾爾"),
     (["団長"], "團長"),
     (["宝鐘マリン", "マリン"], "瑪琳"),
-    (["潤羽るしあ", "るしあ"], "潤羽露西婭"),
+    (["潤羽るしあ", "るしあ"], "露西婭"),
     # ---- JP 4th gen ----
-    (["天音かなた", "かなたん", "かなた~", "カナタ~"], "天音"),
+    (["天音かなた", "かなたん", "かなた~", "カナタ~"], "天音彼方"),
     (["桐生ココ", "ココ会長", "ココ~"], "桐生可可"),
-    (["角巻わため", "わためぇ", "わため", "ワタメ"], "角卷"),  # shown as 綿芽, see OUTPUT_FIXES
+    (["角巻わため", "わためぇ", "わため", "ワタメ", "わた~"], "角卷"),  # shown as 綿芽, see OUTPUT_FIXES
     (["常闇トワ", "トワち", "トワチ", "トワ~", "とわ~"], "Towa"),
-    (["姫森ルーナ", "ルーナ"], "姬森璐娜"),
+    (["姫森ルーナ", "ルーナ"], "璐娜"),
     # ---- JP 5th gen ----
-    (["雪花ラミィ", "ラミィ"], "雪花菈米"),
-    (["桃鈴ねね", "ねねち", "ネネち", "ねね~", "ネネ~"], "桃鈴音音"),
+    (["雪花ラミィ", "ラミィ"], "菈米"),
+    (["桃鈴ねね", "ねねち", "ネネち", "ねね~", "ネネ~"], "音音"),
     (["獅白ぼたん", "ししろん", "ぼたん~", "ボタン~"], "獅白牡丹"),
-    (["尾丸ポルカ", "ポルカ"], "尾丸波爾卡"),
+    (["尾丸ポルカ", "ポルカ"], "波爾卡"),
     # ---- JP holoX ----
     (["ラプラス・ダークネス", "ラプラス", "ラプ~"], "拉普拉斯"),
     (["ルイ姉"], "琉衣姐"),
-    (["鷹嶺ルイ", "ルイ~"], "鷹嶺琉衣"),
-    (["博衣こより", "こより", "コヨリ", "こよ~", "コヨ~"], "博衣小夜璃"),
+    (["鷹嶺ルイ", "ルイ~"], "琉衣"),
+    (["博衣こより", "こより", "コヨリ", "こよ~", "コヨ~"], "小夜璃"),
     (["沙花叉クロヱ", "沙花叉", "クロヱ", "クロエ~"], "沙花叉克蘿耶"),
     (["風真いろは", "いろは~", "イロハ~"], "風真伊呂波"),
     # ---- JP ReGLOSS ----
     # Short/common readings use ~ so they are only replaced before an honorific.
-    (["火威青", "青~", "あお~"], "Ao"),
+    (["火威青", "青~", "あお~"], "青君"),
     (["音乃瀬奏", "奏~", "かなで~"], "Kanade"),
     (["一条莉々華", "莉々華"], "一條莉莉華"),
     (["儒烏風亭らでん", "らでん"], "Raden"),
@@ -143,6 +143,11 @@ MEMBERS = [
 TERMS = {
     # hololive / group names
     "ホロライブ": "hololive",
+    "ホロライブプロダクション": "hololive production",
+    "ホロライブゲーマーズ": "hololive GAMERS",
+    "ホロライブDEV_IS": "hololive DEV_IS",
+    "ホロライブEnglish": "hololive English",
+    "ホロライブIndonesia": "hololive Indonesia",
     "ホロメン": "holo成員",
     "リグロス": "ReGLOSS",
     "フロウグロウ": "FLOW GLOW",
@@ -196,6 +201,62 @@ TERMS = {
 }
 
 
+# Fan community names. With Sakura they are swapped for FAN1, FAN2... and put
+# back after translation (see translator.translate). Matched before member
+# names, so the わため in わためいと isn't taken for
+# the member (09-26 live: ワタメイト -> "wata mereito", わためいと -> 綿芽 and
+# a runaway "哦哦"). Each entry is (forms, display) like MEMBERS; display is
+# the Japanese original for now, edit it to change what the subtitles show.
+# Only names that aren't also ordinary words: 座員, 開拓者, 飼育員, 雪民 and
+# 助手くん would match normal talk.
+FANS = [
+    (["すこん部", "スコン部"], "司空部"),  # 白上フブキ
+    (["まつりす", "マツリス"], "まつりす"),  # 夏色まつり
+    (["あくあクルー"], "あくあクルー"),  # 湊あくあ
+    (["塩っ子"], "塩っ子"),  # 紫咲シオン
+    (["百鬼組"], "百鬼組"),  # 百鬼あやめ
+    (["スバ友", "すば友"], "スバ友"),  # 大空スバル
+    (["ミオファ"], "ミオファ"),  # 大神ミオ
+    (["おにぎりゃー"], "犯糰"),  # 猫又おかゆ
+    (["ころねすきー", "コロネスキー"], "ころねすきー"),  # 戌神ころね
+    (["野うさぎ", "野ウサギ"], "野兔"),  # 兎田ぺこら
+    (["エルフレ"], "エルフレ"),  # 不知火フレア
+    (["白銀聖騎士団"], "白銀聖騎士団"),  # 白銀ノエル
+    (["宝鐘の一味"], "宝鐘の一味"),  # 宝鐘マリン
+    (["へい民", "ヘイ民"], "嘿民"),  # 天音かなた
+    (["わためいと", "ワタメイト"], "綿友"),  # 角巻わため
+    (["常闇眷属"], "常闇眷属"),  # 常闇トワ
+    (["ルーナイト"], "ルーナイト"),  # 姫森ルーナ
+    (["ねっ子"], "音子"),  # 桃鈴ねね
+    (["SSRB"], "SSRB"),  # 獅白ぼたん
+    (["35P"], "35P"),  # さくらみこ
+    (["星詠み"], "星詠者"),  # 星街すいせい
+    (["そらとも"], "そらとも"),  # ときのそら
+    (["ろぼさー", "ロボサー"], "ろぼさー"),  # ロボ子さん
+    (["ロゼ隊"], "ロゼ隊"),  # アキ・ローゼンタール
+    (["はあとん"], "心豚"),  # 赤井はあと
+    (["ちょこめいと"], "ちょこめいと"),  # 癒月ちょこ
+    (["ルイ友"], "ルイ友"),  # 鷹嶺ルイ
+    (["かざま隊"], "風真隊"),  # 風真いろは
+    (["ぷらすめいと", "プラスメイト"], "ぷらすめいと"),  # ラプラス・ダークネス
+    (["こよりの助手くん", "コヨリの助手くん"], "こよりの助手くん"),  # 博衣こより
+    (["音の勢"], "音の勢"),  # 音乃瀬奏
+    (["でん同士"], "でん同士"),  # 儒烏風亭らでん
+    (["真っす組"], "真っす組"),  # 轟はじめ
+]
+# Context a fan-name form must not have, where it is also part of ordinary
+# talk: 音の勢い (momentum of the sound), らでん同士 (Raden's name + 同士).
+_FAN_GUARDS = {"音の勢": ("", "(?!い)"), "でん同士": ("(?<!ら)", "")}
+_FAN_DISPLAY = {form: display for forms, display in FANS for form in forms}
+_FAN_RE = re.compile("|".join(
+    _FAN_GUARDS.get(f, ("", ""))[0] + re.escape(f) + _FAN_GUARDS.get(f, ("", ""))[1]
+    for f in sorted(_FAN_DISPLAY, key=len, reverse=True)))
+
+
+def _fan_spans(text):
+    return [m.span() for m in _FAN_RE.finditer(text)]
+
+
 def _build():
     zh_by_form, needs_honorific = {}, set()
     for forms, zh in MEMBERS:
@@ -227,6 +288,8 @@ def _replace_name(m):
     form, hon = m.group(1), m.group(2)
     if hon is None and form in _NEEDS_HONORIFIC:
         return m.group(0)
+    if any(start < m.end() and m.start() < end for start, end in _fan_spans(m.string)):
+        return m.group(0)  # part of a fan name (わため in わためいと)
     if _KATAKANA_FORM_RE.fullmatch(form):
         before = m.string[m.start() - 1:m.start()]
         after = "" if hon else m.string[m.end(1):m.end(1) + 1]
@@ -283,17 +346,23 @@ def apply(text: str, replace_names: bool = True) -> str:
 
 
 def name_entries(text: str):
-    """(name as written in text, display name) for each member name found,
-    by the same matching rules as apply. For Sakura's glossary prompt: fed the
+    """(name as written in text, display name, note) for each fan name
+    (note "粉絲名", display = the Japanese itself) and member name (note
+    "人名") found, members by the same matching rules as apply. For Sakura's glossary prompt: fed the
     Chinese name inside the Japanese text, Sakura translated it as a word
     (白上フブキ -> "暴風雪", 角卷 -> "捲成一團"); given as a glossary entry
     with the Japanese left as spoken, 240 of 259 test sentences came out with
     the right name vs 203 (benchmark/test_sakura_names.py). Display names go
     through OUTPUT_FIXES, so わため is listed as 綿芽 directly."""
+    text = fix_stt(text)
     entries = []
-    for m in _NAME_RE.finditer(fix_stt(text)):
+    for m in _FAN_RE.finditer(text):
+        entry = (m.group(0), _FAN_DISPLAY[m.group(0)], "粉絲名")
+        if entry not in entries:
+            entries.append(entry)
+    for m in _NAME_RE.finditer(text):
         if _replace_name(m) != m.group(0):
-            entry = (m.group(0), fix_output(_ZH_BY_FORM[m.group(1)]))
+            entry = (m.group(0), fix_output(_ZH_BY_FORM[m.group(1)]), "人名")
             if entry not in entries:
                 entries.append(entry)
     return entries

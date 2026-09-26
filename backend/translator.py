@@ -63,6 +63,7 @@ _loaded = False
 _translator = None  # MADLAD only
 _sp = None  # MADLAD only
 _converter = None
+_FAN_TOKEN_RE = re.compile(r"FAN\s?(\d+)", re.IGNORECASE)
 _to_simplified = None  # glossary entries for Sakura, which writes Simplified
 
 
@@ -140,12 +141,19 @@ def drop_repeated_clauses(text: str) -> str:
 # filler, not an open と; a question (…?) is complete.
 _CONTINUATION_RE = re.compile(r"(て|けど|けれど|のに|ので|たら|ば|と|を|に|も)$")
 _TRAILING_RE = re.compile(r"[\s、。,.…~〜ー]+$")
+# Adverbs that end in に but usually close what was said: joining after them
+# dropped or garbled the next line in live tests (ちなみに + これ斜めゲロー ->
+# only "順帶一提，現在是毒。"; 確かに, さすがに and 本当に joined unrelated
+# lines). Only these seen ones: 一緒に, 普通に, 最初に... usually do continue.
+_ADVERB_NI_RE = re.compile(r"(確か|たしか|さすが|流石|ちなみ|本当|ほんと)に$")
 
 
 def continues(japanese_text: str) -> bool:
     """True if the text ends mid-sentence (see _CONTINUATION_RE)."""
     text = _TRAILING_RE.sub("", japanese_text)
     if text.endswith(("?", "？", "えっと")) or glossary.fixed(japanese_text) is not None:
+        return False
+    if _ADVERB_NI_RE.search(text):
         return False
     return bool(_CONTINUATION_RE.search(text))
 
@@ -215,21 +223,37 @@ def translate(japanese_text: str) -> TranslationResult:
         logger.info("[FIXED] %s -> %s", japanese_text, fixed)
         return TranslationResult(fixed, fixed)
     try:
+        fan_tokens = {}
         if BACKEND == "sakura":
-            # Member names stay as spoken and go in as glossary entries.
+            # Member names stay as spoken and go in as glossary entries (in
+            # Simplified, like Sakura's output). Fan names become FAN1, FAN2...
+            # and are put back after translation: listed as glossary entries,
+            # Sakura kept only 6-8 of 14 Japanese fan names (すこん部 ->
+            # "斯空部", へい民 -> "平民"); as placeholders, 16 of 17.
             source_text = glossary.apply(japanese_text, replace_names=False)
-            names = [(src, _to_simplified.convert(dst)) for src, dst in glossary.name_entries(japanese_text)]
+            names = []
+            for src, dst, note in glossary.name_entries(japanese_text):
+                if note == "粉絲名":
+                    token = f"FAN{len(fan_tokens) + 1}"
+                    source_text = source_text.replace(src, token)
+                    fan_tokens[token] = dst
+                else:
+                    names.append((src, _to_simplified.convert(dst), note))
         else:
             source_text, names = glossary.apply(japanese_text), []
         if source_text != japanese_text:
             logger.info("[GLOSSARY] %s -> %s", japanese_text, source_text)
-        if names:
-            logger.info("[NAMES] %s", ", ".join(f"{src}->{dst}" for src, dst in names))
+        if names or fan_tokens:
+            logger.info("[NAMES] %s", ", ".join([f"{src}->{dst}" for src, dst, _note in names] +
+                                                [f"{token}={dst}" for token, dst in fan_tokens.items()]))
         if BACKEND == "sakura":
             zh_hans = sakura.generate(source_text, names)
         else:
             zh_hans = _run(_translator, _sp, source_text)
         zh_tw = glossary.fix_output(_converter.convert(zh_hans))
+        if fan_tokens:
+            # After OpenCC, so a Japanese display name keeps its kanji (団, not 團).
+            zh_tw = _FAN_TOKEN_RE.sub(lambda m: fan_tokens.get(f"FAN{m.group(1)}", ""), zh_tw)
         if BACKEND == "madlad" and TRANSLATION_DROP_REPEATED_CLAUSES:
             deduped = drop_repeated_clauses(zh_tw)
             if deduped != zh_tw:
