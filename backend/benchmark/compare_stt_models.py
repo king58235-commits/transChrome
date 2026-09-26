@@ -30,6 +30,10 @@ from test_stt_hotwords import chunks
 MODELS = {
     "kotoba": STT_MODEL_PRESETS["kotoba"],
     "turbo": "large-v3-turbo",
+    # CT2 conversion of litagin/anime-whisper (kotoba fine-tuned on galgame
+    # dialogue). 09-26 test: worse than kotoba on stream audio (adds …/あはは,
+    # stutters, more misheard words), not adopted.
+    "anime": "quantumcookie/anime-whisper-ct2",
 }
 
 
