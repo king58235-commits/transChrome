@@ -26,6 +26,8 @@ from config import (
     TRANSCRIBE_TIMEOUT_SECONDS,
     TRANSLATION_BOUNDARY_SILENCE_MS,
     TRANSLATION_IDLE_FLUSH_S,
+    TRANSLATION_JOIN_CONTINUATION,
+    TRANSLATION_JOIN_MAX_GAP_S,
     TRANSLATION_MAX_AUDIO_SECONDS,
     TRANSLATION_MAX_CHARS,
 )
@@ -92,16 +94,35 @@ async def handler(websocket):
     session_start_wallclock = time.monotonic()
 
     stt_final_queue = asyncio.Queue()  # (segment_id, text, speech_start_s, speech_end_s)
-    translation_queue = asyncio.Queue()  # (unit_id, source_segments, text, last_speech_end_s)
+    translation_queue = asyncio.Queue()  # (unit_id, source_segments, text, speech_start_s, last_speech_end_s)
 
     async def translation_worker():
         # Single FIFO consumer: this alone guarantees translations are sent in
         # the same order units were produced (no explicit reordering logic
         # needed), and runs fully independently of maybe_transcribe()'s `busy`
         # flag, so a slow translation can never block partial/final STT.
+        # Previous unit, kept so a unit that finishes its sentence can be
+        # translated together with it (see TRANSLATION_JOIN_CONTINUATION).
+        # None after a joined unit: at most two units are joined.
+        prev = None  # (unit_id, source_segments, text, last_speech_end_s)
         while True:
-            unit_id, source_segments, japanese_text, last_speech_end_s = await translation_queue.get()
+            unit_id, source_segments, japanese_text, speech_start_s, last_speech_end_s = await translation_queue.get()
             try:
+                unit_text = japanese_text
+                joined = False
+                if (
+                    TRANSLATION_JOIN_CONTINUATION
+                    and prev is not None
+                    and prev[3] is not None
+                    and speech_start_s is not None
+                    and 0 <= speech_start_s - prev[3] <= TRANSLATION_JOIN_MAX_GAP_S
+                    and translator.continues(prev[2])
+                ):
+                    logger.info("[JOIN #%d] with #%d: %s + %s", unit_id, prev[0], prev[2], japanese_text)
+                    source_segments = prev[1] + source_segments
+                    japanese_text = prev[2] + japanese_text
+                    joined = True
+                prev = None if joined else (unit_id, source_segments, unit_text, last_speech_end_s)
                 qsize = translation_queue.qsize()
                 if qsize > 3:
                     logger.warning("[TRANSLATE QUEUE] backlog: %d pending", qsize)
@@ -162,7 +183,7 @@ async def handler(websocket):
                 "[TRANSLATION BUFFER #%d]\nsegments=%s\ntext=%s\naudio_span=%.2fs reason=%s",
                 unit_id, seg_ids, merged, span_s, reason,
             )
-            translation_queue.put_nowait((unit_id, seg_ids.copy(), merged, last_speech_end_s))
+            translation_queue.put_nowait((unit_id, seg_ids.copy(), merged, unit_start_audio_s, last_speech_end_s))
             seg_ids = []
             texts = []
             unit_start_audio_s = None

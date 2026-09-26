@@ -53,6 +53,7 @@ Translation: MADLAD / CPU
 | `SILENCE_TRIGGER_MS` | 300ms | STT 斷句用的語音停頓門檻（日文字幕反應速度） |
 | `TRANSLATION_BOUNDARY_SILENCE_MS` | 800ms | 判斷是否合併相鄰 STT final 成一個翻譯單位的真實語音停頓門檻 |
 | `TRANSLATION_IDLE_FLUSH_S` | 0s | 日文定案後等多久才送去翻譯。原為 1.2s，但 live 實測幾乎從未因此合併句子，只讓中文晚 1.8 秒出現；用錄音重播比較 1.2／0.6／0 秒後改為 0（定案即翻，中文約 0.56 秒後出現，譯文內容相同） |
+| `TRANSLATION_JOIN_CONTINUATION` / `TRANSLATION_JOIN_MAX_GAP_S` | True / 3s | 上一句以「…て／けど／と／を」等沒講完的形式結尾、且下一句在 3 秒內接上時，把兩句一起翻譯，中文行直接換成合併後的譯文（最多合併兩句）。用 09-26 的 log 測 24 組：約 15 組變好、6 組差不多、3 組變差 |
 | `TRANSLATION_MAX_AUDIO_SECONDS` / `TRANSLATION_MAX_CHARS` | 7.0s / 70 字 | 保底上限，避免講很久都不停頓時翻譯單位無限變大 |
 
 ## 2. 實際建立的檔案
@@ -76,7 +77,7 @@ Translation: MADLAD / CPU
 | `audio_buffer.py` | 累積收到的 PCM16 音訊 |
 | `transcriber.py` | faster-whisper 封裝：模型載入（含 CUDA 能力偵測與 CPU fallback）、GPU DLL 路徑註冊、VAD 停頓偵測與真實語音時間擷取、partial/final 兩種辨識設定 |
 | `translator.py` | 獨立翻譯模組（刻意不 import transcriber.py，與 STT 解耦）：MADLAD 模型載入（裝置依 `HARDWARE_PRESET` 決定，不再自動 CUDA→CPU fallback，因為裝置已是明確選擇）、日文→簡中翻譯、OpenCC 轉台灣繁中，翻譯失敗永遠回傳空字串、不拋例外 |
-| `glossary.py` | 翻譯前處理：整句只有語助詞或常用短句（ありがとうございます、懐かしい…）時直接給固定譯文；其餘句子再做人名／用語字典替換：把 hololive 成員名與常用直播用語換成固定的中文（或英文）寫法，避免 MADLAD 亂音譯（例如 フブちゃん → 胡佛）。可自行增修，新增名字前先確認 MADLAD 不會把它當一般詞翻譯（說明見檔案開頭） |
+| `glossary.py` | 翻譯前處理：整句只有語助詞或常用短句（ありがとうございます、懐かしい…）時直接給固定譯文；其餘句子再做人名／用語字典替換：把 hololive 成員名與常用直播用語換成固定的中文（或英文）寫法，避免 MADLAD 亂音譯（例如 フブちゃん → 胡佛）。可自行增修，新增名字前先確認 MADLAD 不會把它當一般詞翻譯（說明見檔案開頭）。`STT_FIXES` 放反覆出現的固定聽錯（例如 また目／渡辺 → わため），只收在實際 log 中重複出現、且錯誤寫法在該位置不是一般用詞的項目 |
 | `config.py` | 所有可調參數（STT 模型選擇、VAD 閾值、翻譯合併門檻等，見上方「目前正式參數」） |
 | `test_client.py` | 不需要 Chrome，直接送合成音訊測試 backend 的除錯工具 |
 | `benchmark/` | 模型/硬體比較工具與長期參考資料：`recorder.py`（錄固定測試音訊）、`run_model.py`/`run_translation_model.py`/`run_madlad_decoding_sweep.py`（STT/翻譯模型與 decoding 參數跑分）、`test_*.py`（硬體相容性測試）、`translation_dataset.py`（固定 70 句翻譯測試集）、三份 `.md` 比較報告。原始逐句 JSON 輸出跟測試音訊本身（`.wav`，內含真實直播內容，有版權疑慮）不進 Git，只保留腳本、資料集跟摘要報告 |

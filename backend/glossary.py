@@ -4,15 +4,18 @@ MADLAD transliterates member names phonetically into random Chinese names
 (フブちゃん -> 胡佛, まつりちゃん -> 馬斯特里). Replacing them in the Japanese input with the fixed Chinese (or English) form
 works because MADLAD copies Han characters and Latin text through as-is.
 
-Only correctly spelled forms belong here. STT misrecognitions (ホグちゃん,
-ハンジャマ) are an STT problem; mapping them here would start rewriting
-unrelated words.
+MEMBERS and TERMS only hold correctly spelled forms. STT misrecognitions go in
+STT_FIXES below, and only ones seen repeatedly in real logs whose wrong form
+is not an ordinary word in that position (one-off errors like ホグちゃん,
+ハンジャマ stay out: mapping them would start rewriting unrelated words).
 
 Display names were picked by translating each one in fixed test sentences and
 keeping the form MADLAD leaves intact: kanji that mean something get
-translated (天音彼方 -> "天音那邊", 癒月巧可 -> "治療月巧可", 綿芽 -> "棉花發芽"),
+translated (天音彼方 -> "天音那邊", 癒月巧可 -> "治療月巧可", 綿芽 -> "棉花芽"),
 so those members use a shorter form or a Latin name instead (天音, 巧可,
-角卷, Towa). Check a new display name the same way before adding it.
+Towa). Check a new display name the same way before adding it. When the
+wanted display name gets translated but another form doesn't, feed MADLAD
+the stable form and swap it back with OUTPUT_FIXES (角卷 -> 綿芽).
 
 Edit freely: each member entry is (forms, zh). A form ending in "~" is a
 base that is also an ordinary Japanese word (まつり = festival, そら = sky),
@@ -59,7 +62,7 @@ MEMBERS = [
     # ---- JP 4th gen ----
     (["天音かなた", "かなたん", "かなた~"], "天音"),
     (["桐生ココ", "ココ会長", "ココ~"], "桐生可可"),
-    (["角巻わため", "わためぇ", "わため", "ワタメ"], "角卷"),
+    (["角巻わため", "わためぇ", "わため", "ワタメ"], "角卷"),  # shown as 綿芽, see OUTPUT_FIXES
     (["常闇トワ", "トワち", "トワチ", "トワ~", "とわ~"], "Towa"),
     (["姫森ルーナ", "ルーナ"], "姬森璐娜"),
     # ---- JP 5th gen ----
@@ -230,7 +233,39 @@ def _replace_name(m):
 _GENERATION_RE = re.compile(r"([0-9０-９一二三四五六七八九]+)期生")
 
 
+# Recurring Kotoba misrecognitions -> the intended word, applied before the
+# name lookup so a corrected name then gets its display name. Each entry is
+# (regex, replacement) with the evidence next to it; the lookahead keeps
+# ordinary uses (また目の前, また目が覚めた) untouched.
+STT_FIXES = [
+    (r"また目(?![のがをにでも覚])", "わため"),  # 2026-09-26 live: また目何の王様? / また目は / また目将軍
+    (r"渡目|綿目", "わため"),  # replays of 09-26 recordings (not words)
+    (r"渡辺", "わため"),  # 2026-09-26 live: すまん!渡辺! / 渡辺将軍; a real surname, remove if it bites
+]
+_STT_FIX_RES = [(re.compile(p), r) for p, r in STT_FIXES]
+
+
+def fix_stt(text: str) -> str:
+    for pattern, replacement in _STT_FIX_RES:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+# Chinese output -> intended display name, applied after OpenCC. わため goes
+# into MADLAD as 角卷 and is shown as 綿芽: fed 綿芽 directly, MADLAD read it
+# as "cotton sprout" in 6 of 20 test sentences (わためが来た -> "棉花已經長出芽
+# 來了"), 角卷 came through in 20 of 20. OpenCC sometimes writes it 角捲.
+OUTPUT_FIXES = {"角卷": "綿芽", "角捲": "綿芽"}
+
+
+def fix_output(text: str) -> str:
+    for wrong, right in OUTPUT_FIXES.items():
+        text = text.replace(wrong, right)
+    return text
+
+
 def apply(text: str) -> str:
+    text = fix_stt(text)
     text = _NAME_RE.sub(_replace_name, text)
     text = _GENERATION_RE.sub(lambda m: m.group(1) + "期成員", text)
     return _TERM_RE.sub(lambda m: TERMS[m.group(0)], text)

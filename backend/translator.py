@@ -124,6 +124,22 @@ def drop_repeated_clauses(text: str) -> str:
     return result
 
 
+# Japanese endings that leave a sentence open (…て, …けど, …のに, …と, …を):
+# the next unit most likely finishes it. Particles like は/が/の/って were
+# tried too and joined unrelated sentences more often than not. えっと is a
+# filler, not an open と; a question (…?) is complete.
+_CONTINUATION_RE = re.compile(r"(て|けど|けれど|のに|ので|たら|ば|と|を|に|も)$")
+_TRAILING_RE = re.compile(r"[\s、。,.…~〜ー]+$")
+
+
+def continues(japanese_text: str) -> bool:
+    """True if the text ends mid-sentence (see _CONTINUATION_RE)."""
+    text = _TRAILING_RE.sub("", japanese_text)
+    if text.endswith(("?", "？", "えっと")) or glossary.fixed(japanese_text) is not None:
+        return False
+    return bool(_CONTINUATION_RE.search(text))
+
+
 def load_model():
     """Load the MADLAD translator + tokenizer + OpenCC converter, on the
     device fixed by config.TRANSLATION_DEVICE (set via HARDWARE_PRESET — see
@@ -178,7 +194,7 @@ def translate(japanese_text: str) -> TranslationResult:
         if source_text != japanese_text:
             logger.info("[GLOSSARY] %s -> %s", japanese_text, source_text)
         zh_hans = _run(_translator, _sp, source_text)
-        zh_tw = _converter.convert(zh_hans)
+        zh_tw = glossary.fix_output(_converter.convert(zh_hans))
         if TRANSLATION_DROP_REPEATED_CLAUSES:
             deduped = drop_repeated_clauses(zh_tw)
             if deduped != zh_tw:

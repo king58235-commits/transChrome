@@ -87,6 +87,8 @@ def run_one(tr, sp, conv, ja, cfg):
         limit = math.ceil(src_len * ratio) + offset
         hyp = next((h for h in hyps if len(h) <= limit), hyps[0])
     zh = conv.convert(sp.decode(hyp))
+    if cfg.get("glossary", True):
+        zh = glossary.fix_output(zh)
     if cfg.get("dedup", TRANSLATION_DROP_REPEATED_CLAUSES):  # production applies this too
         zh = translator.drop_repeated_clauses(zh)
     return {"zh": zh, "src_tokens": src_len, "out_tokens": len(hyp), "ms": round(ms, 1)}

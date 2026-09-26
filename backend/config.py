@@ -135,3 +135,14 @@ TRANSLATION_MAX_CHARS = 70  # force-flush once buffered text reaches this many J
 # 0.0 = translate as soon as a final arrives (units still merge if several
 # finals are already queued, and the max caps above still apply).
 TRANSLATION_IDLE_FLUSH_S = 0.0
+# When the previous unit ended mid-sentence (…て, …けど, …と, see
+# translator.continues) and this unit follows within TRANSLATION_JOIN_MAX_GAP_S
+# of audio, translate both together; the Chinese line (which each translation
+# replaces anyway) then shows the joined sentence. At most two units are
+# joined. On 24 such pairs from the 09-26 logs the joined translation was
+# better in ~15, about the same in ~6, worse in ~3 ("ズボン履いて / 上からスカート"
+# -> "褲子和上面的裙子" instead of "身上長了毛髮" + "從上面的裙子裙子").
+# Joining after a short last unit (no continuation ending) was net worse, so
+# it isn't done. False turns it off.
+TRANSLATION_JOIN_CONTINUATION = True
+TRANSLATION_JOIN_MAX_GAP_S = 3.0
