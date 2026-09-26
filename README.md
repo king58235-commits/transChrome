@@ -49,6 +49,7 @@ Translation: Sakura-7B / CUDA (llama.cpp b11200)
 | `LLAMA_CPP_RELEASE` / `LLAMA_SERVER_DIR` | `b11200` / `runtime/llama.cpp` | Sakura 用的 llama.cpp 官方 Windows CUDA 版，由 `setup_llama.py` 安裝，不進 Git |
 | `SAKURA_MAX_TOKENS_*` | 每字 2、最少 32、上限 320 | 輸出保護：每句最多輸出的 token 數；另外生成中出現同一段字重複 8 次以上會立刻中止 |
 | `STT_HALLUCINATION_TEXTS` / `STT_HALLUCINATION_MAX_SPEECH_S` | `{"ごめん"}` / 0.3s | Whisper 在幾乎無聲的片段上會幻聽出「ごめん」：整句只有這個詞、且人聲不到 0.3 秒時丟棄（不顯示不翻譯）。依據：實測 log 中 17 次 ごめん 全部人聲 < 0.2 秒 |
+| `VAD_FALLBACK_*` | 開啟、音量 0.04、人聲 < 0.3s | Silero VAD 在遊戲音效／料理雜音混著人聲時可能完全聽不到人聲，導致字幕停住：VAD 幾乎沒偵測到人聲但音量夠大時，改成不經 VAD 直接辨識，且要等音量也降下來才算停頓（log 記 `[VAD FALLBACK]`）。錄音重播：遊戲／料理直播各救回 12／25 句，安靜與播歌場景只多 1～3 句，延遲約 +0.1 秒 |
 | `AUDIO_GAP_LOG_S` | 1.0s | 卡頓診斷（只記錄）：超過此時間沒收到音訊時記 `[GAP]`；另有 `[LOOP LAG]`、`[SAKURA] slow generation`、`[SLOW SEND]`，以及擴充功能回報的 `[CLIENT DIAG]`（capture_gap／send_backlog） |
 | `TRANSLATION_MODEL_REPO` 等 | MADLAD 設定 | 只在 `TRANSLATION_BACKEND = "madlad"` 時使用 |
 | `LOG_TO_FILE` | True | console log 同時寫進 `backend/logs/backend_*.log`（約 3MB／小時，不進 Git），live 測試後不用再手動複製 log |

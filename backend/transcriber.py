@@ -33,7 +33,16 @@ import numpy as np
 from faster_whisper import WhisperModel
 from faster_whisper.vad import VadOptions, get_speech_timestamps
 
-from config import SAMPLE_RATE, SILENCE_TRIGGER_MS, STT_MODEL, STT_MODEL_PRESETS, WHISPER_LANGUAGE
+from config import (
+    SAMPLE_RATE,
+    SILENCE_TRIGGER_MS,
+    STT_MODEL,
+    STT_MODEL_PRESETS,
+    VAD_FALLBACK_ENABLED,
+    VAD_FALLBACK_MAX_SPEECH_S,
+    VAD_FALLBACK_MIN_RMS,
+    WHISPER_LANGUAGE,
+)
 
 MODEL_REPO = STT_MODEL_PRESETS[STT_MODEL]
 
@@ -45,6 +54,10 @@ _silence_vad_options = VadOptions(min_silence_duration_ms=SILENCE_TRIGGER_MS, sp
 
 def _pcm16_to_float32(pcm16_bytes: bytes) -> np.ndarray:
     return np.frombuffer(pcm16_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+
+
+def _rms(audio: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(audio ** 2))) if len(audio) else 0.0
 
 # A chunk with no clear speech (silence/music/a word cut off at a boundary) can
 # occasionally make Whisper's decoder fall into a runaway repetition loop,
@@ -101,8 +114,20 @@ def transcribe(pcm16_bytes: bytes, final: bool = False) -> str:
 
     audio = _pcm16_to_float32(pcm16_bytes)
     kwargs = FINAL_KWARGS if final else PARTIAL_KWARGS
+    fallback = False
+    if VAD_FALLBACK_ENABLED:
+        speech = get_speech_timestamps(audio, _silence_vad_options, sampling_rate=SAMPLE_RATE)
+        speech_s = sum(s["end"] - s["start"] for s in speech) / SAMPLE_RATE
+        # Loud audio VAD hears (almost) no speech in: don't let Whisper's
+        # own VAD filter throw it away, see config.VAD_FALLBACK_ENABLED.
+        if speech_s < VAD_FALLBACK_MAX_SPEECH_S and _rms(audio) >= VAD_FALLBACK_MIN_RMS:
+            kwargs = dict(kwargs, vad_filter=False)
+            fallback = True
     segments, _info = _model.transcribe(audio, language=WHISPER_LANGUAGE, **kwargs)
-    return "".join(segment.text for segment in segments).strip()
+    text = "".join(segment.text for segment in segments).strip()
+    if fallback and final:
+        logger.info("[VAD FALLBACK] %.2fs of VAD speech, RMS %.3f -> %r", speech_s, _rms(audio), text)
+    return text
 
 
 def has_trailing_silence(pcm16_bytes: bytes) -> bool:
@@ -112,7 +137,11 @@ def has_trailing_silence(pcm16_bytes: bytes) -> bool:
     audio = _pcm16_to_float32(pcm16_bytes)
     segments = get_speech_timestamps(audio, _silence_vad_options, sampling_rate=SAMPLE_RATE)
     if not segments:
-        return True
+        # VAD hears nothing: normally a pause, but if the last
+        # SILENCE_TRIGGER_MS is still loud, VAD is probably missing speech
+        # (see config.VAD_FALLBACK_ENABLED), so keep the segment open.
+        tail = audio[-int(SAMPLE_RATE * SILENCE_TRIGGER_MS / 1000):]
+        return not (VAD_FALLBACK_ENABLED and _rms(tail) >= VAD_FALLBACK_MIN_RMS)
     trailing_samples = len(audio) - segments[-1]["end"]
     trailing_ms = trailing_samples / SAMPLE_RATE * 1000
     return trailing_ms >= SILENCE_TRIGGER_MS

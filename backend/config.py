@@ -53,6 +53,21 @@ MAX_CHUNK_SECONDS = 8.0  # force a finalize after this much regardless of VAD, s
 # uninterrupted speech doesn't grow latency unboundedly
 SILENCE_TRIGGER_MS = 300  # trailing silence needed to count as "a pause happened"
 
+# VAD fallback: Silero VAD sometimes hears no speech at all in loud speech
+# mixed with game audio or cooking noise (0.0s detected in 12s of continuous
+# talking in a 09-26 live test), so that audio was thrown away and subtitles
+# stopped. When VAD finds under VAD_FALLBACK_MAX_SPEECH_S of speech but the
+# audio is at least VAD_FALLBACK_MIN_RMS loud, it is transcribed without
+# Whisper's VAD filter, and a pause is only assumed once the audio also gets
+# quiet. Replaying 4 recordings: 12 and 25 real lines recovered in the game
+# and cooking streams, 1-3 extra short lines in the quiet/music ones, no
+# invented text; ZH latency +0.1s median where it kicks in. Missed speech
+# measured RMS 0.04-0.13, near-silent chunks (where Kotoba hallucinates
+# ごめん) 0.003-0.026. False turns it off.
+VAD_FALLBACK_ENABLED = True
+VAD_FALLBACK_MIN_RMS = 0.04
+VAD_FALLBACK_MAX_SPEECH_S = 0.3
+
 PARTIAL_MIN_SECONDS = 0.5  # don't bother transcribing a shorter open segment
 PARTIAL_INTERVAL_SECONDS = 0.75  # how often to refresh the partial preview
 
