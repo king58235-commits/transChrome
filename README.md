@@ -1,4 +1,4 @@
-# transChrome v1.0.0
+# transChrome v1.0.1
 
 在 YouTube 上即時顯示「日文原文＋繁體中文翻譯」字幕的本機工具。語音辨識和翻譯都在你自己的電腦上執行，不需要雲端服務或付費 API。
 
@@ -35,7 +35,7 @@ setup.bat
 
 ### 方式 B：ZIP（不需要 Git）
 
-1. 到 [Releases 頁面](https://github.com/king58235-commits/transChrome/releases/latest) 下載 `transChrome-1.0.0.zip`
+1. 到 [Releases 頁面](https://github.com/king58235-commits/transChrome/releases/latest) 下載 `transChrome-1.0.1.zip`
 2. 解壓縮到任意資料夾（路徑建議不要有特殊符號）
 3. 雙擊 `setup.bat`
 
@@ -52,7 +52,7 @@ setup.bat
 
 ```
 ============================================
-  transChrome v1.0.0 Backend Ready
+  transChrome v1.0.1 Backend Ready
 
   STT:         Kotoba / CUDA
   Translation: Sakura-7B / CUDA
@@ -167,7 +167,7 @@ Chrome 分頁音訊
 
 | 參數 | 值 | 用途 |
 |---|---|---|
-| `VERSION` | `1.0.0` | 版本號 |
+| `VERSION` | `1.0.1` | 版本號 |
 | `TRANSLATION_BACKEND` | `sakura` | 正式翻譯模型；改成 `madlad` 可切回舊版 MADLAD（程式保留以便 rollback） |
 | `SAKURA_MODEL_REPO` / `SAKURA_MODEL_FILE` | `SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF` / `iq4xs` | 選型依據見 `benchmark/sakura_translation_benchmark.md` |
 | `LLAMA_CPP_RELEASE` | `b11200` | llama.cpp 官方 Windows CUDA 12.4 版 |

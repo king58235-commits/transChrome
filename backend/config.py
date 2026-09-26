@@ -1,4 +1,4 @@
-VERSION = "1.0.0"  # shown at startup; keep in sync with extension/manifest.json
+VERSION = "1.0.1"  # shown at startup; keep in sync with extension/manifest.json
 
 HOST = "127.0.0.1"
 PORT = 8765

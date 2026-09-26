@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "transChrome：YouTube 日文即時中文字幕",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "擷取 YouTube 分頁音訊，在本機進行日文語音辨識並翻譯成繁體中文，顯示在播放器上。需要搭配本機的 transChrome backend。",
   "permissions": [
     "tabCapture",
