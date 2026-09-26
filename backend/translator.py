@@ -80,7 +80,30 @@ _CONTENT_CHAR_RE = re.compile(r"[一-鿿぀-ヿA-Za-z0-9]")
 _FUNCTION_CHARS = set("很太也都還又就了的是在得著過呢吧啊嗎呀哦喔而且和與或者最真非常點些個這那麼樣")
 
 
+# MADLAD also lists alternatives separated by spaces ("停下來 停住 停止",
+# "樂器大河 音樂大河"). Chinese doesn't put spaces between characters, so a
+# space between two Han characters marks such a list: a segment sharing half
+# or more of its characters with what was kept before it is dropped. Segments
+# with little overlap stay ("他說 我不知道").
+_CJK_SPACE_RE = re.compile(r"(?<=[一-鿿])\s+(?=[一-鿿])")
+
+
+def _drop_space_alternatives(text: str) -> str:
+    segments = _CJK_SPACE_RE.split(text)
+    if len(segments) == 1:
+        return text
+    kept, seen = [], set()
+    for segment in segments:
+        chars = set(_CONTENT_CHAR_RE.findall(segment))
+        if kept and chars and len(chars & seen) / len(chars) >= 0.5:
+            continue
+        kept.append(segment)
+        seen |= chars
+    return " ".join(kept) if len(kept) < len(segments) else text
+
+
 def drop_repeated_clauses(text: str) -> str:
+    text = _drop_space_alternatives(text)
     parts = _CLAUSE_SPLIT_RE.split(text)
     clauses, separators = parts[0::2], parts[1::2] + [""]
     kept, seen = [], set()

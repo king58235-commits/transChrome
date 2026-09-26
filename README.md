@@ -49,7 +49,7 @@ Translation: MADLAD / CPU
 | `LOG_TO_FILE` | True | console log 同時寫進 `backend/logs/backend_*.log`（約 3MB／小時，不進 Git），live 測試後不用再手動複製 log |
 | `SAVE_SESSION_AUDIO` | False | 設成 `True` 時，每次「開始字幕」會把收到的音訊另存成 `backend/recordings/session_*.wav`（約 115MB／小時，不進 Git），供之後離線重跑 STT／翻譯合併測試；不影響字幕 |
 | `TRANSLATION_LENGTH_PENALTY` | 0.5 | 讓 beam search 偏好較短的完整譯文，減少短句「自己加戲／同義重複」，校準依據同上（live-session 段落） |
-| `TRANSLATION_DROP_REPEATED_CLAUSES` | True | 刪掉譯文中「換句話再講一次」的子句（例：「我太緊張了，我很緊張。」→「我太緊張了。」）；只刪幾乎完全重複、或多出來的只有虛詞的子句，正常的並列句不受影響 |
+| `TRANSLATION_DROP_REPEATED_CLAUSES` | True | 刪掉譯文中「換句話再講一次」的子句（例：「我太緊張了，我很緊張。」→「我太緊張了。」），以及用空格列出的同義說法（「停下來 停住 停止」→「停下來」）；只刪幾乎完全重複、或多出來的只有虛詞的部分，正常的並列句不受影響 |
 | `SILENCE_TRIGGER_MS` | 300ms | STT 斷句用的語音停頓門檻（日文字幕反應速度） |
 | `TRANSLATION_BOUNDARY_SILENCE_MS` | 800ms | 判斷是否合併相鄰 STT final 成一個翻譯單位的真實語音停頓門檻 |
 | `TRANSLATION_IDLE_FLUSH_S` | 0s | 日文定案後等多久才送去翻譯。原為 1.2s，但 live 實測幾乎從未因此合併句子，只讓中文晚 1.8 秒出現；用錄音重播比較 1.2／0.6／0 秒後改為 0（定案即翻，中文約 0.56 秒後出現，譯文內容相同） |
