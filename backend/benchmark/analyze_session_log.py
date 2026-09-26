@@ -42,12 +42,13 @@ def parse(path):
 def summarize(path, show_units):
     events, units = parse(path)
     final_t = {e[2]: e[0] for e in events if e[1] == "final"}
-    delays, behind = [], 0
+    delays, behind, by_reason = [], 0, {}
     for t, kind, u in events:
         if kind != "zh" or u not in units or units[u]["segs"][-1] not in final_t:
             continue
         ft = final_t[units[u]["segs"][-1]]
         delays.append((t - ft).total_seconds())
+        by_reason.setdefault(units[u]["reason"], []).append(delays[-1])
         if any(k in ("partial", "final") and ft < tt < t for tt, k, _ in events):
             behind += 1
     delays.sort()
@@ -59,6 +60,8 @@ def summarize(path, show_units):
     if n:
         print(f"JA final -> ZH ready: avg {sum(delays)/n:.2f}s  median {delays[n//2]:.2f}s  p90 {delays[int(n*0.9)]:.2f}s")
         print(f"ZH ready after the JA line already moved to the next sentence: {behind}/{n} ({behind/n:.0%})")
+        for reason, ds in sorted(by_reason.items()):
+            print(f"  {reason}: {len(ds)} units, avg {sum(ds)/len(ds):.2f}s after the last final")
     if show_units:
         for u, v in units.items():
             mark = "+" if len(v["segs"]) > 1 else " "
