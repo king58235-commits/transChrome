@@ -22,7 +22,7 @@ WHISPER_LANGUAGE = "ja"
 # benchmark this is based on. Only two presets exist right now; a "low"
 # (CPU-only) preset was explicitly ruled out as not viable (Kotoba on CPU
 # measured at realtime factor 2.622 — can't keep up with live audio at all).
-HARDWARE_PRESET = "balanced"
+HARDWARE_PRESET = "high"
 
 HARDWARE_PRESETS = {
     # RTX 3050 8GB-class cards: VRAM is too tight for both models on GPU at
