@@ -27,6 +27,7 @@ import glossary
 import translator  # registers the NVIDIA DLL dirs before ctranslate2 loads
 from config import (
     TRANSLATION_BEAM_SIZE,
+    TRANSLATION_DROP_REPEATED_CLAUSES,
     TRANSLATION_LENGTH_PENALTY,
     TRANSLATION_NO_REPEAT_NGRAM_SIZE,
     TRANSLATION_TGT_TOKEN,
@@ -50,7 +51,8 @@ PRODUCTION_KWARGS = dict(
 CONFIGS = {
     "production": {},
     # decoding the 2026-09-26 live session actually ran (before length_penalty=0.5)
-    "live_0926": {"kwargs": {"length_penalty": 1.0}, "glossary": False},
+    "live_0926": {"kwargs": {"length_penalty": 1.0}, "glossary": False, "dedup": False},
+    "no_dedup": {"dedup": False},
     "no_glossary": {"glossary": False},
     "hard_cap_1.5": {"hard_cap": (1.5, 2)},
     "nbest_1.5": {"nbest": (1.5, 2)},
@@ -64,7 +66,7 @@ CONFIGS = {
 
 def run_one(tr, sp, conv, ja, cfg):
     if cfg.get("glossary", True):  # production applies these too (translator.translate)
-        fixed = glossary.filler(ja)
+        fixed = glossary.fixed(ja)
         if fixed is not None:
             return {"zh": fixed, "src_tokens": 0, "out_tokens": 0, "ms": 0.0}
         ja = glossary.apply(ja)
@@ -84,7 +86,10 @@ def run_one(tr, sp, conv, ja, cfg):
         ratio, offset = cfg["nbest"]
         limit = math.ceil(src_len * ratio) + offset
         hyp = next((h for h in hyps if len(h) <= limit), hyps[0])
-    return {"zh": conv.convert(sp.decode(hyp)), "src_tokens": src_len, "out_tokens": len(hyp), "ms": round(ms, 1)}
+    zh = conv.convert(sp.decode(hyp))
+    if cfg.get("dedup", TRANSLATION_DROP_REPEATED_CLAUSES):  # production applies this too
+        zh = translator.drop_repeated_clauses(zh)
+    return {"zh": zh, "src_tokens": src_len, "out_tokens": len(hyp), "ms": round(ms, 1)}
 
 
 def main():
