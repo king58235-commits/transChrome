@@ -10,7 +10,7 @@
 | 瀏覽器 | Google Chrome 116 以上 |
 | 顯示卡 | 支援 CUDA 的 NVIDIA 顯示卡，並安裝最新的 NVIDIA 驅動程式（不需要另外安裝 CUDA Toolkit） |
 | 顯示卡記憶體（VRAM） | **建議 12GB**。本工具本身約使用 6.5GB；目前主要測試環境為 RTX 4070 Ti 12GB，8GB 以下的顯示卡尚未測試 |
-| Python | 3.10 以上（64 位元），安裝時勾選「Add python.exe to PATH」 |
+| Python | 3.10 以上（64 位元），請先從 [python.org](https://www.python.org/downloads/) 下載安裝，安裝時勾選「Add python.exe to PATH」（`setup.bat` 不會自動安裝 Python） |
 | 磁碟空間 | 建議預留 **12GB**（執行環境約 3GB、AI 模型約 5.5GB，安裝過程另有下載暫存） |
 | 網路 | 安裝與第一次啟動需要下載約 **7.5GB**（套件約 1.5GB、llama.cpp 約 0.3GB、AI 模型約 5.8GB） |
 
@@ -19,7 +19,7 @@
 ### 方式 A：Git
 
 ```
-git clone <repository URL>
+git clone https://github.com/king58235-commits/transChrome.git
 cd transChrome
 setup.bat
 ```
@@ -35,7 +35,7 @@ setup.bat
 
 ### 方式 B：ZIP（不需要 Git）
 
-1. 下載 `transChrome-1.0.0.zip`
+1. 到 [Releases 頁面](https://github.com/king58235-commits/transChrome/releases/latest) 下載 `transChrome-1.0.0.zip`
 2. 解壓縮到任意資料夾（路徑建議不要有特殊符號）
 3. 雙擊 `setup.bat`
 
